@@ -132,9 +132,18 @@ needs queue-based Ruppert + encroachment + sliver handling) and **facet-interior
 recovery** (needs per-facet 2-D Delaunay + conforming refinement). See
 [`openspec/`](openspec/) for the roadmap.
 
-Builds CPU-only with zero dependencies; the suite (120 tests + pure-C ABI smoke
-test) is green across the default, `-Werror`, ASan, and single-precision mobile
-profiles.
+**GPU + Python bindings — landed (tested on real hardware).** With
+`CMG_WITH_CUDA=ON`, a real CUDA kernel runs the batched `orient3d` fast-filter on
+the GPU (validated on an NVIDIA RTX 5060: signs match the exact CPU predicate,
+`last_backend()` reports `cuda`, uncertain signs escalated to the exact path). The
+Python module (`cybermesh`, ctypes over the extended C ABI) meshes a PLC and returns
+NumPy arrays — `mesh.points` `(N,3)`, `mesh.tetrahedra` `(M,4)` — verified against
+mesh volume. OpenCL/Metal (no device / Apple-only here) and the Swift wrapper (no
+toolchain here) are scaffolded and deferred.
+
+Builds CPU-only with zero dependencies; the suite (**121 CPU / 122 with CUDA** tests
++ pure-C ABI smoke + Python binding test) is green across the default, `-Werror`,
+ASan, and single-precision mobile profiles, and on the CUDA GPU path.
 
 ## Build
 

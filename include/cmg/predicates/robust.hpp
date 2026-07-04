@@ -36,4 +36,13 @@ double insphere(const Point3& a, const Point3& b, const Point3& c,
 std::vector<double> orient3d_batch(std::span<const Point3> pts,
                                    std::span<const Tetrahedron> candidates);
 
+/// Batched orient3d SIGN filter (-1/0/+1 per candidate). When built with CUDA and a
+/// device is present and the batch is above the offload threshold, the fast filter
+/// runs on the GPU and candidates with an uncertain (near-zero) GPU sign are
+/// escalated to the exact CPU predicate — so the returned signs are identical to the
+/// exact CPU path. This is the batched form the point-location/insertion hot path
+/// uses. Query `backend::last_backend()` to see which path served the batch.
+std::vector<int> orient3d_signs(std::span<const Point3> pts,
+                                std::span<const Tetrahedron> candidates);
+
 } // namespace cmg::robust
