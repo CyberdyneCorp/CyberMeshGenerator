@@ -28,3 +28,7 @@ dist/
 
 # example generated cache
 examples/**/_*cache.npz
+
+# large example asset (user-provided)
+examples/eiffel/*.STL
+examples/eiffel/*.stl
