@@ -1,6 +1,7 @@
 // CyberMeshGenerator — tetrahedron circumcenter (shared geometry helper).
 #pragma once
 
+#include <algorithm>
 #include <cmath>
 
 #include "cmg/core/geometry.hpp"

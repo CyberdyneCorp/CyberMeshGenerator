@@ -10,9 +10,15 @@
 #include <vector>
 
 #include "cmg/cmg.hpp"
+#include "cmg/io/io.hpp"
 
 // Opaque handle definitions.
-struct cmg_plc { cmg::PLC value; };
+struct cmg_plc {
+    cmg::PLC value;
+    // Flattened read-back caches (filled lazily by the accessors).
+    std::vector<double> pts_cache;
+    std::vector<int> tri_cache;
+};
 struct cmg_options { cmg::MeshOptions value; };
 struct cmg_mesh {
     cmg::Mesh value;
@@ -208,6 +214,152 @@ const int* cmg_mesh_tet_markers(const cmg_mesh* m) {
 }
 const int* cmg_mesh_face_markers(const cmg_mesh* m) {
     return (m && !m->value.face_markers.empty()) ? m->value.face_markers.data() : nullptr;
+}
+
+/* --- file loading / saving ---------------------------------------------- */
+
+cmg_status cmg_plc_simplify(const cmg_plc* in, int grid, cmg_plc** out,
+                            char* errbuf, size_t len) {
+    if (out) *out = nullptr;
+    if (!in || !out) return CMG_ERR_INVALID_INPUT;
+    try {
+        cmg::simplify::SimplifyOptions o;
+        o.grid = grid;
+        auto r = cmg::simplify::simplify(in->value, o);
+        if (!r) {
+            set_err(errbuf, len, r.error().message);
+            return to_status(r.error().code);
+        }
+        *out = new cmg_plc{std::move(*r)};
+        return CMG_OK;
+    } catch (const std::exception& e) {
+        set_err(errbuf, len, e.what());
+        return CMG_ERR_INTERNAL;
+    }
+}
+
+cmg_status cmg_read_plc(const char* path, cmg_plc** out, char* errbuf, size_t len) {
+    if (out) *out = nullptr;
+    if (!path || !out) return CMG_ERR_INVALID_INPUT;
+    try {
+        auto r = cmg::io::read_plc(path);
+        if (!r) {
+            set_err(errbuf, len, r.error().message);
+            return to_status(r.error().code);
+        }
+        *out = new cmg_plc{std::move(*r)};
+        return CMG_OK;
+    } catch (const std::exception& e) {
+        set_err(errbuf, len, e.what());
+        return CMG_ERR_INTERNAL;
+    }
+}
+
+cmg_status cmg_read_points(const char* path, cmg_plc** out, char* errbuf, size_t len) {
+    if (out) *out = nullptr;
+    if (!path || !out) return CMG_ERR_INVALID_INPUT;
+    try {
+        auto r = cmg::io::read_points(path);
+        if (!r) {
+            set_err(errbuf, len, r.error().message);
+            return to_status(r.error().code);
+        }
+        auto* h = new cmg_plc{};
+        h->value.points = std::move(*r);
+        *out = h;
+        return CMG_OK;
+    } catch (const std::exception& e) {
+        set_err(errbuf, len, e.what());
+        return CMG_ERR_INTERNAL;
+    }
+}
+
+cmg_status cmg_read_mesh(const char* path, cmg_mesh** out, char* errbuf, size_t len) {
+    if (out) *out = nullptr;
+    if (!path || !out) return CMG_ERR_INVALID_INPUT;
+    try {
+        auto r = cmg::io::read_mesh(path);
+        if (!r) {
+            set_err(errbuf, len, r.error().message);
+            return to_status(r.error().code);
+        }
+        *out = flatten(std::move(*r));
+        return CMG_OK;
+    } catch (const std::exception& e) {
+        set_err(errbuf, len, e.what());
+        return CMG_ERR_INTERNAL;
+    }
+}
+
+cmg_status cmg_write_mesh(const char* path, const cmg_mesh* m, char* errbuf, size_t len) {
+    if (!path || !m) return CMG_ERR_INVALID_INPUT;
+    try {
+        auto r = cmg::io::write_mesh(path, m->value);
+        if (!r) {
+            set_err(errbuf, len, r.error().message);
+            return to_status(r.error().code);
+        }
+        return CMG_OK;
+    } catch (const std::exception& e) {
+        set_err(errbuf, len, e.what());
+        return CMG_ERR_INTERNAL;
+    }
+}
+
+cmg_status cmg_write_plc(const char* path, const cmg_plc* p, char* errbuf, size_t len) {
+    if (!path || !p) return CMG_ERR_INVALID_INPUT;
+    try {
+        auto r = cmg::io::write_plc(path, p->value);
+        if (!r) {
+            set_err(errbuf, len, r.error().message);
+            return to_status(r.error().code);
+        }
+        return CMG_OK;
+    } catch (const std::exception& e) {
+        set_err(errbuf, len, e.what());
+        return CMG_ERR_INTERNAL;
+    }
+}
+
+size_t cmg_plc_num_points(const cmg_plc* p) {
+    return p ? p->value.points.size() : 0;
+}
+
+const double* cmg_plc_points(cmg_plc* p) {
+    if (!p) return nullptr;
+    p->pts_cache.clear();
+    p->pts_cache.reserve(p->value.points.size() * 3);
+    for (const auto& pt : p->value.points) {
+        p->pts_cache.push_back(static_cast<double>(pt.x));
+        p->pts_cache.push_back(static_cast<double>(pt.y));
+        p->pts_cache.push_back(static_cast<double>(pt.z));
+    }
+    return p->pts_cache.data();
+}
+
+static void fill_triangles(cmg_plc* p) {
+    p->tri_cache.clear();
+    for (const auto& f : p->value.facets)
+        for (const auto& poly : f.polygons) {
+            const auto& v = poly.vertices;
+            for (std::size_t i = 2; i < v.size(); ++i) { // fan-triangulate
+                p->tri_cache.push_back(v[0]);
+                p->tri_cache.push_back(v[i - 1]);
+                p->tri_cache.push_back(v[i]);
+            }
+        }
+}
+
+size_t cmg_plc_num_triangles(cmg_plc* p) {
+    if (!p) return 0;
+    fill_triangles(p);
+    return p->tri_cache.size() / 3;
+}
+
+const int* cmg_plc_triangles(cmg_plc* p) {
+    if (!p) return nullptr;
+    fill_triangles(p);
+    return p->tri_cache.data();
 }
 
 const char* cmg_version(void) { return CMG_VERSION_STRING; }

@@ -10,6 +10,7 @@
 #include "cmg/io/io.hpp"
 #include "harness.hpp"
 
+#include <algorithm>
 #include <array>
 #include <set>
 #include <string>

@@ -56,6 +56,27 @@ int main(void) {
         cmg_mesh_destroy(pmesh);
     }
 
+    /* File I/O round-trip: write the tetrahedron PLC to a .off surface file and
+     * read it back, checking the point count survives the trip. */
+    cmg_status wst = cmg_write_plc("/tmp/s.off", plc, merr, sizeof merr);
+    if (wst != CMG_OK) {
+        fprintf(stderr, "cmg_write_plc failed (%d): %s\n", wst, merr);
+        ok = 0;
+    } else {
+        cmg_plc* rplc = NULL;
+        char rerr[256] = {0};
+        cmg_status rst = cmg_read_plc("/tmp/s.off", &rplc, rerr, sizeof rerr);
+        if (rst != CMG_OK) {
+            fprintf(stderr, "cmg_read_plc failed (%d): %s\n", rst, rerr);
+            ok = 0;
+        } else {
+            size_t rnp = cmg_plc_num_points(rplc);
+            printf("C ABI IO: read_plc points=%zu\n", rnp);
+            ok = ok && (rnp > 0);
+            cmg_plc_destroy(rplc);
+        }
+    }
+
     cmg_mesh_destroy(mesh);
     cmg_options_destroy(opts);
     cmg_options_destroy(bad);

@@ -57,32 +57,12 @@ def find_tetgen():
     return None
 
 
-def read_ascii_stl(path: Path):
-    tri = []
-    for line in path.read_text().splitlines():
-        s = line.split()
-        if len(s) == 4 and s[0] == "vertex":
-            tri.append((float(s[1]), float(s[2]), float(s[3])))
-    return np.asarray(tri).reshape(-1, 3, 3)
-
-
-def cluster_decimate(corners, grid=GRID):
-    V = corners.reshape(-1, 3)
-    lo, ext = V.min(0), (V.max(0) - V.min(0)).max()
-    cell = np.floor((V - lo) / ext * grid).astype(int)
-    key = cell[:, 0] * grid * grid * 4 + cell[:, 1] * grid * 2 + cell[:, 2]
-    uk, inv = np.unique(key, return_inverse=True)
-    reps = np.zeros((len(uk), 3)); cnt = np.zeros(len(uk))
-    np.add.at(reps, inv, V); np.add.at(cnt, inv, 1); reps /= cnt[:, None]
-    vi = inv.reshape(len(corners), 3)
-    faces, seen = [], set()
-    for a, b, c in vi:
-        if a == b or b == c or a == c:
-            continue
-        k = tuple(sorted((int(a), int(b), int(c))))
-        if k not in seen:
-            seen.add(k); faces.append((int(a), int(b), int(c)))
-    return reps, faces
+def load_and_simplify(path: Path, grid=GRID):
+    """Load the STL natively (cm.read_plc — ASCII or binary) and simplify it in the
+    library (cm.simplify) — no hand-written parsing or vertex clustering. Returns
+    (full_triangle_count, simplified_plc)."""
+    full = cm.read_plc(str(path))
+    return full.triangles.shape[0], cm.simplify(full, grid=grid)
 
 
 def tet_volume(P, T):
@@ -105,15 +85,10 @@ def run_tetgen(binary, P):
     ele = Path("/tmp/eiffel_cmp.1.ele")
     if not ele.exists():
         return None
-    L = [l for l in ele.read_text().splitlines() if l.strip() and not l.startswith("#")]
-    T = np.array([list(map(int, L[i + 1].split()[1:5]))
-                  for i in range(int(L[0].split()[0]))])
-    T -= T.min()
-    Ln = [l for l in Path("/tmp/eiffel_cmp.1.node").read_text().splitlines()
-          if l.strip() and not l.startswith("#")]
-    TP = np.array([list(map(float, Ln[i + 1].split()[1:4]))
-                   for i in range(int(Ln[0].split()[0]))])
-    return TP, T, dt
+    # Load TetGen's output through the native mesh reader (.ele + companion .node) —
+    # no hand-parsing of the TetGen index format.
+    tg = cm.read_mesh(str(ele))
+    return tg.points, tg.tetrahedra, dt
 
 
 def set_equal(ax, V):
@@ -155,11 +130,11 @@ def render_dt(ax, P, T, title, cmap):
 
 def main():
     stl = find_stl()
-    print("Reading", stl.name, "...")
-    corners = read_ascii_stl(stl)
-    print(f"  {len(corners)} triangles (full)")
-    P, F = cluster_decimate(corners)
-    print(f"  decimated (grid {GRID}): {len(P)} verts, {len(F)} triangles")
+    print("Loading + simplifying", stl.name, "natively (cm.read_plc / cm.simplify) ...")
+    full_tris, sic = load_and_simplify(stl)
+    P, F = sic.points, sic.triangles
+    print(f"  {full_tris} triangles (full) -> simplified (grid {GRID}): "
+          f"{len(P)} verts, {len(F)} triangles")
 
     t = time.time(); mesh = cm.delaunay(P); dt_ours = time.time() - t
     v_ours = tet_volume(mesh.points, mesh.tetrahedra)
@@ -169,7 +144,7 @@ def main():
     tg = find_tetgen()
     tg_result = run_tetgen(tg, P) if tg else None
     panels = [lambda ax: render_surface(ax, P, F,
-              f"Eiffel surface (open lattice)\n{len(corners)} tris → decimated {len(F)}")]
+              f"Eiffel surface (open lattice)\n{full_tris} tris → simplified {len(F)}")]
     panels.append(lambda ax: render_dt(ax, mesh.points, mesh.tetrahedra,
                   f"CyberMeshGenerator Delaunay\n{mesh.tetrahedra.shape[0]} tets · "
                   f"vol {v_ours:.0f}", plt.cm.viridis))

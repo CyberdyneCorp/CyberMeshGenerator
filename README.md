@@ -45,110 +45,50 @@ auto opts = MeshOptions::from_switches("pq1.414a0.1");   // TetGen-compatible
 - **Exact predicates preserved** — Shewchuk's adaptive predicates are ported
   verbatim and compiled at `-O0` so the optimizer cannot break their robustness.
 
-## Status
+## Python
 
-**Phase 1 (Delaunay tetrahedralization) — landed.** On top of the Phase 0
-foundation (typed API, robust predicates, build profiles, backend-dispatch and
-binding architecture, TetGen oracle harness), the incremental **Bowyer-Watson**
-Delaunay kernel is implemented: BRIO-Hilbert-ordered insertion, exact-predicate
-point location and cavity, convex-hull faces, optional neighbor adjacency, and the
-weighted (regular) DT variant. `delaunay()` now meshes arbitrary point sets.
+The `cybermesh` binding (ctypes/NumPy over the stable C ABI) takes a model from file
+to mesh with no hand-written parser:
 
-**Phase 2 (file formats) — landed.** A `cmg::io` layer reads and writes TetGen's
-native containers (`.node`, `.poly`, `.smesh`, `.ele`, `.face`, `.edge`, `.neigh`)
-and the interchange formats (STL ASCII+binary, OFF, PLY, legacy VTK, Medit
-`.mesh`), extension-dispatched, with round-trip fidelity.
+```python
+import cybermesh as cm
 
-This unlocks the **live TetGen oracle**: the suite reads a real TetGen 1.6.0
-Delaunay output and confirms `delaunay()` produces the *identical* tetrahedralization
-(same sorted-tuple set) on a general-position cloud — the kernel is now validated
-against TetGen itself, not only its invariants.
+# Load a surface directly — STL / OBJ / OFF / PLY / native .poly/.smesh:
+plc  = cm.read_plc("bunny.stl")
+plc  = cm.simplify(plc, grid=48)                 # optional: decimate a dense surface
 
-**Phase 3 (constrained tetrahedralization, increment 1) — landed.**
-`tetrahedralize(PLC)` now meshes the *interior* of a solid: the Delaunay
-tetrahedralization of the PLC vertices, carved (by ray-casting each tetrahedron
-against the boundary facets) to the tetrahedra inside the domain, with the domain
-boundary faces emitted. Exact and volume-conserving for convex / star-shaped
-domains — a cube PLC meshes to volume 1.0, an L-shaped prism to 3.0 (carving away
-the hull's exterior). Full exact-facet-preserving CDT (boundary recovery, `-Y`,
-concave conformance) is the next increment.
+# Mesh the solid interior (boundary-conforming carve):
+mesh = cm.tetrahedralize(plc, cm.MeshOptions(plc=True))
+print(mesh.points.shape, mesh.tetrahedra.shape)  # (N, 3) float64, (M, 4) int32
 
-**Phase 4 (quality mesh generation, increment 1) — landed.** Setting
-`MeshOptions::max_volume` triggers Delaunay refinement — inserting Steiner points
-until every tetrahedron meets the volume bound (a cube capped at 0.05 refines from
-6 to ~76 tets, volume still 1.0), with a `steiner_budget` cap. Shape/radius-edge
-refinement is deferred (it diverges on slivers without exudation + encroachment
-handling — shipped honestly as a documented non-goal rather than broken).
+# ...or the Delaunay tetrahedralization of a point cloud / open surface:
+mesh = cm.delaunay(cm.read_plc("antenna.obj").points)
 
-**Phase 5 (adaptive mesh sizing, increment 1) — landed.** `MeshOptions::sizing`
-takes a target-edge-length field — an analytic closure or one built from a
-background mesh (`cmg::sizing::from_background`, barycentric-interpolated, with
-metric scaling) — and refinement grades element size to it (a box with a fine
-half and coarse half meshes ~7× finer in the fine region). It reuses Phase 4's
-self-limiting volume engine via a spatially-varying volume target, so it inherits
-the same robustness.
+# Inspect a loaded PLC's geometry, and read/write meshes (format from extension):
+pts, tris = plc.points, plc.triangles            # (N, 3) float64, (M, 3) int32
+cm.write_mesh("out.1.ele", mesh)                 # also .vtk / .mesh
+```
 
-**Phase 6 (region attributes & holes, increment 1) — landed.** A PLC's `regions`
-(seed + material attribute) and `holes` (seed marking a void) are now honored:
-post-carve connected-component classification assigns each component the attribute
-of a region seed inside it (`tet_markers`), removes hole-seeded components, and —
-under `MeshOptions::label_regions` (`-AA`) — auto-labels each component distinctly.
-Two separated solids in one PLC mesh into correctly-attributed materials.
+Build the shared C ABI once, then point the binding at it:
 
-**Phase 9 (Voronoi diagram) — landed.** `cmg::voronoi::build(delaunay(points))`
-produces the geometric dual: Voronoi vertices (tet circumcenters), edges (finite
-between adjacent tets, outward rays for hull faces), and per-site cells — completing
-the "Delaunay **and Voronoi** engine" identity. Validated by duality: circumcenter
-equidistance holds to ~1e-16, one vertex per tet, one edge per face.
+```bash
+cmake -S . -B build-py -DCMG_BUILD_C_ABI=ON -DCMG_BUILD_SHARED=ON \
+      -DCMG_BUILD_TESTS=OFF -DCMG_BUILD_CLI=OFF && cmake --build build-py -j
+export CMG_C_LIB=$(find build-py -name 'libcmg_c.so' | head -1)
+export PYTHONPATH=bindings/python/src
+python -c "import cybermesh, numpy; print(cybermesh.version())"
+```
 
-**CDT boundary recovery — step 1 (segment recovery) — landed.** Under
-`MeshOptions::preserve_edges`, a PLC's facet edges (feature/crease edges) are
-recovered by bisection so each appears as a chain of mesh edges — even when the
-edge is provably not a Delaunay edge of the input vertices. This is the tractable
-half of constrained-Delaunay boundary recovery; **facet (triangle) recovery** is
-the next step.
-
-**Mesh optimization + partials — landed.** `cmg::optimize::laplacian_smooth`
-does **quality-guarded** (smart Laplacian) smoothing of interior vertices — it
-never inverts a tetrahedron *or* worsens the minimum dihedral angle, keeping the
-boundary and volume fixed. Alongside: `.vol`/`.mtr` constraint-file I/O, Voronoi
-`.v.*` file output, and the **power (weighted) diagram** (orthocenter-dual of the
-weighted Delaunay).
-
-**CLI + reconstruction + coarsening — landed.** A `cmg` executable
-(`cmg -pq1.414a0.1 part.poly`) reads by extension, meshes, and writes TetGen-named
-`<base>.1.node`/`.ele`/`.face`. `cmg::reconstruct::reconstruct` re-meshes and
-refines an existing mesh; `cmg::coarsen::coarsen` removes interior vertices to
-decimate while keeping the boundary.
-
-**Quality metrics + self-intersection detection — landed.**
-`cmg::quality::report` gives radius-edge / dihedral / volume statistics, a dihedral
-histogram, and the worst elements; `cmg::detect::self_intersections` finds crossing
-PLC facets via exact-predicate (Guigue-Devillers) triangle-triangle tests.
-
-Two hard cores are **deliberately deferred with evidence**: 3-D **shape/radius-edge
-refinement** (measured to diverge to thousands of Steiner points at bounds 2.0-3.0 —
-needs queue-based Ruppert + encroachment + sliver handling) and **facet-interior
-recovery** (needs per-facet 2-D Delaunay + conforming refinement). See
-[`openspec/`](openspec/) for the roadmap.
-
-**GPU + Python bindings — landed (tested on real hardware).** With
-`CMG_WITH_CUDA=ON`, a real CUDA kernel runs the batched `orient3d` fast-filter on
-the GPU (validated on an NVIDIA RTX 5060: signs match the exact CPU predicate,
-`last_backend()` reports `cuda`, uncertain signs escalated to the exact path). The
-Python module (`cybermesh`, ctypes over the extended C ABI) meshes a PLC and returns
-NumPy arrays — `mesh.points` `(N,3)`, `mesh.tetrahedra` `(M,4)` — verified against
-mesh volume. OpenCL/Metal (no device / Apple-only here) and the Swift wrapper (no
-toolchain here) are scaffolded and deferred.
-
-Builds CPU-only with zero dependencies; the suite (**121 CPU / 122 with CUDA** tests
-+ pure-C ABI smoke + Python binding test) is green across the default, `-Werror`,
-ASan, and single-precision mobile profiles, and on the CUDA GPU path.
+The same surface goes through the **Swift** binding over the same C ABI
+(`CyberMesh.readPLC` / `tetrahedralize` / `simplify` / `delaunay`; see
+[`bindings/swift`](bindings/swift)).
 
 ## Examples
 
 Worked examples in [`examples/`](examples/) run the **Python** binding on real 3-D
-data. Each parses a mesh, feeds it to CyberMeshGenerator, and renders the result.
+data. Each loads a model natively (`cm.read_plc`), meshes it with CyberMeshGenerator,
+and renders the result. See [`examples/native_load`](examples/native_load) for the
+minimal file-to-mesh path.
 
 ### Stanford Bunny — watertight STL → **solid** interior mesh
 
@@ -161,10 +101,11 @@ volume equals the surface-enclosed volume to **0.2 %**.
 
 ### Eiffel Tower — CyberMeshGenerator **vs real TetGen**
 
-Delaunay tetrahedralization of the same points, computed by both tools:
-**100.00 % identical tetrahedra** (12,326 each), volume equal to 1.5×10⁻¹¹ — bit-for-bit
-agreement with the reference implementation on real scan data.
-([`examples/eiffel`](examples/eiffel))
+Delaunay tetrahedralization of the same points, computed by both tools: total volume
+agreeing to **~0.01 %** and **~99 % identical tetrahedra** on real scan data. Both
+results are valid Delaunay triangulations; the sub-percent remainder is tie-breaking on
+cospherical (grid-clustered) points, where any two independent implementations may
+choose differently. ([`examples/eiffel`](examples/eiffel))
 
 ![Eiffel Tower vs TetGen](examples/eiffel/eiffel_comparison.png)
 

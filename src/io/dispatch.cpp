@@ -51,6 +51,7 @@ Format detect(std::string_view path) {
     if (e == "ply") return Format::Ply;
     if (e == "vtk") return Format::Vtk;
     if (e == "mesh") return Format::Medit;
+    if (e == "obj") return Format::Obj;
     return Format::Auto;
 }
 
@@ -66,6 +67,7 @@ expected<PLC, MeshError> read_plc(const std::string& path) {
         case Format::Stl:   return read_stl(path);
         case Format::Off:   return read_off(path);
         case Format::Ply:   return read_ply(path);
+        case Format::Obj:   return read_obj(path);
         default:            return unsupported(path);
     }
 }
@@ -101,6 +103,7 @@ WriteResult write_mesh(const std::string& path, const Mesh& mesh, Format format)
         case Format::Medit: return write_medit(path, mesh);
         case Format::Off:   return write_off_mesh(path, mesh);
         case Format::Stl:   return write_stl_mesh(path, mesh);
+        case Format::Obj:   return write_obj_mesh(path, mesh);
         default:            return unsupported(path);
     }
 }
@@ -113,6 +116,7 @@ WriteResult write_plc(const std::string& path, const PLC& plc, Format format) {
         case Format::Off:   return write_off(path, plc);
         case Format::Ply:   return write_ply(path, plc);
         case Format::Stl:   return write_stl(path, plc);
+        case Format::Obj:   return write_obj(path, plc);
         default:            return unsupported(path);
     }
 }

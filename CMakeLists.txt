@@ -116,6 +116,7 @@ add_library(cmg
     src/cli/cli.cpp
     src/reconstruct/reconstruct.cpp
     src/coarsen/coarsen.cpp
+    src/simplify/simplify.cpp
     src/quality/metrics.cpp
     src/detect/self_intersection.cpp
     src/backend/dispatch.cpp
@@ -131,6 +132,7 @@ add_library(cmg
     src/io/ply.cpp
     src/io/vtk.cpp
     src/io/medit.cpp
+    src/io/obj.cpp
 )
 add_library(cmg::cmg ALIAS cmg)
 
