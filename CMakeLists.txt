@@ -107,6 +107,7 @@ add_library(cmg
     src/constrained/tetrahedralize_plc.cpp
     src/quality/refine.cpp
     src/sizing/background.cpp
+    src/region/classify.cpp
     src/backend/dispatch.cpp
     src/predicates/robust.cpp
     src/predicates/predicates.cpp
