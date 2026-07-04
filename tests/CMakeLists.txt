@@ -8,6 +8,7 @@ add_executable(cmg_tests
     test_sizing.cpp test_region.cpp test_voronoi.cpp test_recovery.cpp
     test_optimize.cpp test_constraints.cpp test_voronoi_io.cpp
     test_cli.cpp test_reconstruct.cpp test_coarsen.cpp
+    test_metrics.cpp test_detect.cpp
     ${CMG_IO_TESTS} oracle/test_oracle.cpp)
 target_link_libraries(cmg_tests PRIVATE cmg::cmg)
 target_include_directories(cmg_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
