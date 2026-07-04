@@ -41,6 +41,7 @@ struct MeshOptions {
     bool weighted = false;          ///< -w: weighted (regular) Delaunay
     bool convex = false;            ///< -c: retain the convex hull
     bool detect_intersections = false; ///< -d: report self-intersections
+    bool label_regions = false;     ///< -AA: auto-label each connected region
 
     std::optional<Quality> quality;      ///< -q: enable quality refinement
     std::optional<Real> max_volume;      ///< -a#: global max tetrahedron volume

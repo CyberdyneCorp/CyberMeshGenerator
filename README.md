@@ -88,11 +88,18 @@ half and coarse half meshes ~7× finer in the fine region). It reuses Phase 4's
 self-limiting volume engine via a spatially-varying volume target, so it inherits
 the same robustness.
 
+**Phase 6 (region attributes & holes, increment 1) — landed.** A PLC's `regions`
+(seed + material attribute) and `holes` (seed marking a void) are now honored:
+post-carve connected-component classification assigns each component the attribute
+of a region seed inside it (`tet_markers`), removes hole-seeded components, and —
+under `MeshOptions::label_regions` (`-AA`) — auto-labels each component distinctly.
+Two separated solids in one PLC mesh into correctly-attributed materials.
+
 Optimization, Voronoi and the CLI remain scheduled as their own OpenSpec changes —
 see [`openspec/`](openspec/) for the roadmap and
 [`openspec/project.md`](openspec/project.md) for context.
 
-Builds CPU-only with zero dependencies; the suite (85 tests + pure-C ABI smoke
+Builds CPU-only with zero dependencies; the suite (90 tests + pure-C ABI smoke
 test) is green across the default, `-Werror`, ASan, and single-precision mobile
 profiles.
 

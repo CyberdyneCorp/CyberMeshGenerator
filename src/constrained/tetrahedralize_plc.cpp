@@ -14,6 +14,7 @@
 #include <vector>
 
 #include "cmg/api.hpp"
+#include "cmg/region/classify.hpp"
 
 namespace cmg::cdt {
 namespace {
@@ -137,6 +138,10 @@ expected<Mesh, MeshError> tetrahedralize_plc(const PLC& plc,
             out.face_markers.push_back(1);
         }
     }
+
+    // Apply PLC regions/holes: assign material attributes, remove hole-seeded
+    // components, optionally auto-label. No-op without regions/holes/label.
+    region::apply(out, plc, opts.label_regions);
     return out;
 }
 
