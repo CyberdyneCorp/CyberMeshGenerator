@@ -6,6 +6,7 @@
 #include <limits>
 
 #include "cmg/api.hpp"
+#include "cmg/core/circumcenter.hpp"
 #include "cmg/constrained/tetrahedralize_plc.hpp"
 #include "cmg/predicates/robust.hpp"
 
@@ -26,24 +27,6 @@ double norm2(const V3& a) { return dot(a, a); }
 double tet_volume(const Point3& a, const Point3& b, const Point3& c,
                   const Point3& d) {
     return std::fabs(dot(sub(b, a), cross(sub(c, a), sub(d, a)))) / 6.0;
-}
-
-// Circumcenter of a,b,c,d. Returns false for a (near-)degenerate/sliver tet.
-bool circumcenter(const Point3& a, const Point3& b, const Point3& c,
-                  const Point3& d, Point3& out, double& radius) {
-    V3 B = sub(b, a), C = sub(c, a), D = sub(d, a);
-    double denom = 2.0 * dot(B, cross(C, D));
-    double scale = std::sqrt(std::max({norm2(B), norm2(C), norm2(D), 1e-30}));
-    if (std::fabs(denom) < 1e-12 * scale * scale * scale) return false;
-    V3 num;
-    V3 t1 = cross(C, D), t2 = cross(D, B), t3 = cross(B, C);
-    num.x = (norm2(B) * t1.x + norm2(C) * t2.x + norm2(D) * t3.x) / denom;
-    num.y = (norm2(B) * t1.y + norm2(C) * t2.y + norm2(D) * t3.y) / denom;
-    num.z = (norm2(B) * t1.z + norm2(C) * t2.z + norm2(D) * t3.z) / denom;
-    out = {static_cast<Real>(a.x + num.x), static_cast<Real>(a.y + num.y),
-           static_cast<Real>(a.z + num.z)};
-    radius = std::sqrt(norm2(num));
-    return true;
 }
 
 // p lies inside some tetrahedron of `mesh` (tets stored orient3d(v0..v3) < 0).
@@ -160,7 +143,7 @@ expected<Mesh, MeshError> refine(std::vector<Point3> points, const PLC* plc,
             if (vol <= bound_vol) continue;
             Point3 cc;
             double R = 0;
-            bool have_cc = circumcenter(a, b, c, d, cc, R) && cc_admissible(cc, R);
+            bool have_cc = geom::circumcenter(a, b, c, d, cc, R) && cc_admissible(cc, R);
             Point3 site = (have_cc && inside_domain(mesh, cc)) ? cc : ctr;
             bad.push_back({vol, site});
         }

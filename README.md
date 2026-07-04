@@ -95,11 +95,17 @@ of a region seed inside it (`tet_markers`), removes hole-seeded components, and 
 under `MeshOptions::label_regions` (`-AA`) — auto-labels each component distinctly.
 Two separated solids in one PLC mesh into correctly-attributed materials.
 
-Optimization, Voronoi and the CLI remain scheduled as their own OpenSpec changes —
-see [`openspec/`](openspec/) for the roadmap and
-[`openspec/project.md`](openspec/project.md) for context.
+**Phase 9 (Voronoi diagram) — landed.** `cmg::voronoi::build(delaunay(points))`
+produces the geometric dual: Voronoi vertices (tet circumcenters), edges (finite
+between adjacent tets, outward rays for hull faces), and per-site cells — completing
+the "Delaunay **and Voronoi** engine" identity. Validated by duality: circumcenter
+equidistance holds to ~1e-16, one vertex per tet, one edge per face.
 
-Builds CPU-only with zero dependencies; the suite (90 tests + pure-C ABI smoke
+Mesh optimization, reconstruction, the CLI, and the deferred CDT boundary-recovery
+core remain scheduled as their own OpenSpec changes — see [`openspec/`](openspec/)
+for the roadmap and [`openspec/project.md`](openspec/project.md) for context.
+
+Builds CPU-only with zero dependencies; the suite (95 tests + pure-C ABI smoke
 test) is green across the default, `-Werror`, ASan, and single-precision mobile
 profiles.
 
