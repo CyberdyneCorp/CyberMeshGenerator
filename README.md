@@ -45,6 +45,68 @@ auto opts = MeshOptions::from_switches("pq1.414a0.1");   // TetGen-compatible
 - **Exact predicates preserved** — Shewchuk's adaptive predicates are ported
   verbatim and compiled at `-O0` so the optimizer cannot break their robustness.
 
+## Architecture
+
+A model enters through any front-end, flows through the shared core engine, and comes
+back out as mesh files or in-memory arrays. The Python and Swift bindings sit on a
+stable C ABI; the CLI and C++ API call the core directly.
+
+```mermaid
+flowchart LR
+    subgraph IN["Input formats"]
+        direction TB
+        I1["Surfaces<br/>STL · OBJ · OFF · PLY"]
+        I2["PLC / points<br/>.poly · .smesh · .node"]
+        I3["Meshes<br/>.ele · .vtk · .mesh"]
+    end
+
+    subgraph FE["Bindings / front-ends"]
+        direction TB
+        PY["Python — cybermesh<br/>(ctypes / NumPy)"]
+        SW["Swift — CyberMesh"]
+        CLI["CLI — cmg"]
+        CPP["C++ API — cmg::"]
+    end
+
+    CABI["Stable C ABI<br/>opaque handles · status codes"]
+
+    subgraph CORE["Core engine (cmg::)"]
+        direction TB
+        IO["io · format dispatch"]
+        PLCN["PLC · MeshOptions"]
+        ENG["Delaunay · constrained carve<br/>refinement · sizing · regions/holes<br/>Voronoi / power · optimize<br/>simplify · coarsen · reconstruct"]
+        PRED["Exact predicates<br/>(Shewchuk, -O0)"]
+        IO --> PLCN --> ENG --> PRED
+    end
+
+    subgraph BK["Backends"]
+        direction TB
+        CPUB["CPU — always on"]
+        GPU["CUDA · OpenCL* · Metal*"]
+    end
+
+    subgraph OUT["Output"]
+        direction TB
+        O1["Tetrahedral Mesh"]
+        O2[".node/.ele/.face<br/>.vtk · .mesh"]
+        O3["Voronoi .v.*"]
+        O4["NumPy arrays<br/>points · tetrahedra · faces"]
+    end
+
+    IN --> FE
+    PY --> CABI
+    SW --> CABI
+    CLI --> CORE
+    CPP --> CORE
+    CABI --> CORE
+    ENG -. dispatch .-> BK
+    CORE --> OUT
+```
+
+<sub>* OpenCL / Metal backends are scaffolded behind the dispatch layer; CPU is always
+present and CUDA is validated on real hardware. The Swift binding is source-only in this
+release.</sub>
+
 ## Python
 
 The `cybermesh` binding (ctypes/NumPy over the stable C ABI) takes a model from file
