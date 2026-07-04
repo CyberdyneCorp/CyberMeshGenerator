@@ -54,14 +54,24 @@ bool ray_hits(const Point3& o, const double d[3], const Point3& a,
     return t > 1e-9; // strictly forward
 }
 
-// Odd crossing count along a fixed generic direction => point inside the domain.
+// Point-in-domain by ray casting. A single ray can miscount when it grazes a
+// shared edge of two boundary triangles (common once refinement packs many tets
+// against the boundary, and worse in single precision), so cast three
+// independent generic-direction rays and take the majority parity. This makes the
+// carve robust without a full boundary-adjacency classifier.
 bool inside_domain(const Point3& c, const std::vector<Point3>& pts,
                    const std::vector<Tri>& tris) {
-    static const double dir[3] = {0.5773269, 0.5774341, 0.5771914};
-    int crossings = 0;
-    for (const Tri& t : tris)
-        if (ray_hits(c, dir, pts[t[0]], pts[t[1]], pts[t[2]])) ++crossings;
-    return (crossings & 1) != 0;
+    static const double dirs[3][3] = {{0.5773269, 0.5774341, 0.5771914},
+                                      {0.3251097, -0.7211021, 0.6119274},
+                                      {-0.8017412, 0.2673021, 0.5346203}};
+    int inside_votes = 0;
+    for (const auto& dir : dirs) {
+        int crossings = 0;
+        for (const Tri& t : tris)
+            if (ray_hits(c, dir, pts[t[0]], pts[t[1]], pts[t[2]])) ++crossings;
+        if (crossings & 1) ++inside_votes;
+    }
+    return inside_votes >= 2;
 }
 
 Point3 centroid(const Point3& a, const Point3& b, const Point3& c,

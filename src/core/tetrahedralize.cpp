@@ -11,6 +11,7 @@
 #include "cmg/constrained/tetrahedralize_plc.hpp"
 #include "cmg/delaunay/incremental.hpp"
 #include "cmg/predicates/robust.hpp"
+#include "cmg/quality/refine.hpp"
 
 namespace cmg {
 
@@ -53,13 +54,20 @@ expected<Mesh, MeshError> delaunay(std::span<const Point3> points,
                                     "non-coplanar points"});
     }
 
-    // Fast path for the irreducible unweighted 4-point case.
-    if (points.size() == 4 && !opts.weighted) {
+    const bool refine_requested = opts.quality.has_value() || opts.max_volume;
+
+    // Fast path for the irreducible unweighted 4-point case (no refinement).
+    if (points.size() == 4 && !opts.weighted && !refine_requested) {
         if (robust::orient3d(points[0], points[1], points[2], points[3]) == 0) {
             return unexpected(MeshError{MeshErrorCode::InvalidInput,
                                         "the four input points are coplanar"});
         }
         return single_tet(points, opts.index_base);
+    }
+
+    // Quality/size refinement (Phase 4) refines within the point set's hull.
+    if (refine_requested && !opts.weighted) {
+        return quality::refine({points.begin(), points.end()}, nullptr, opts);
     }
 
     // General case: incremental Bowyer-Watson (Phase 1 kernel).
@@ -79,7 +87,10 @@ expected<Mesh, MeshError> tetrahedralize(const PLC& in, const MeshOptions& opts)
         return delaunay(in.points, opts);
     }
 
-    // Faceted PLC: boundary-conforming tetrahedralization of the domain interior.
+    // Faceted PLC: boundary-conforming tetrahedralization; refine if requested.
+    if (opts.quality.has_value() || opts.max_volume) {
+        return quality::refine(in.points, &in, opts);
+    }
     return cdt::tetrahedralize_plc(in, opts);
 }
 
