@@ -16,6 +16,7 @@
 #include "cmg/core/mesh.hpp"
 #include "cmg/core/options.hpp"
 #include "cmg/core/plc.hpp"
+#include "cmg/optimize/smooth.hpp"
 #include "cmg/predicates/robust.hpp"
 #include "cmg/sizing/background.hpp"
 #include "cmg/version.hpp"

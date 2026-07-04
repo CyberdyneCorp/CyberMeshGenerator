@@ -107,6 +107,37 @@ CMG_TEST("cells are non-empty per used vertex and cover all tets") {
     CMG_CHECK(covered.size() == m->tet_count());
 }
 
+CMG_TEST("power diagram vertices are orthocenters (equal power to all 4 vertices)") {
+    // Weighted (regular) Delaunay of the cube corners with small distinct weights.
+    auto pts = cube_pts();
+    std::vector<Real> w(8);
+    for (int i = 0; i < 8; ++i) w[i] = static_cast<Real>(0.01 * i);
+    MeshOptions o;
+    o.weighted = true;
+    o.weights = w;
+    auto m = delaunay(pts, o);
+    CMG_CHECK(bool(m));
+
+    std::vector<double> wd(w.begin(), w.end());
+    auto v = voronoi::build_power(*m, wd);
+    CMG_CHECK(v.vertices.size() == m->tet_count());
+
+    // The orthocenter has equal power |c - p_i|^2 - w_i to all four tet vertices.
+    for (std::size_t i = 0; i < m->tetrahedra.size(); ++i) {
+        const auto& t = m->tetrahedra[i];
+        const Point3& c = v.vertices[i];
+        double p0 = dist(c, m->points[t[0]]) * dist(c, m->points[t[0]]) - wd[t[0]];
+        for (int k = 1; k < 4; ++k) {
+            double pk = dist(c, m->points[t[k]]) * dist(c, m->points[t[k]]) - wd[t[k]];
+            CMG_CHECK(std::fabs(pk - p0) < 1e-5);
+        }
+    }
+    // Same edge/cell duality as the unweighted diagram.
+    auto [interior, hull] = face_counts(*m);
+    CMG_CHECK(v.edges.size() - v.ray_count() == static_cast<std::size_t>(interior));
+    CMG_CHECK(v.ray_count() == static_cast<std::size_t>(hull));
+}
+
 CMG_TEST("no non-finite Voronoi vertices on a cospherical input") {
     // 8 cube corners are cospherical -> degeneracy-prone circumcenters.
     auto m = delaunay(cube_pts(), {});

@@ -108,11 +108,18 @@ edge is provably not a Delaunay edge of the input vertices. This is the tractabl
 half of constrained-Delaunay boundary recovery; **facet (triangle) recovery** is
 the next step.
 
-Mesh optimization, reconstruction, and the CLI remain scheduled as their own
-OpenSpec changes — see [`openspec/`](openspec/) for the roadmap and
+**Mesh optimization + partials — landed.** `cmg::optimize::laplacian_smooth`
+does **quality-guarded** (smart Laplacian) smoothing of interior vertices — it
+never inverts a tetrahedron *or* worsens the minimum dihedral angle, keeping the
+boundary and volume fixed. Alongside: `.vol`/`.mtr` constraint-file I/O, Voronoi
+`.v.*` file output, and the **power (weighted) diagram** (orthocenter-dual of the
+weighted Delaunay).
+
+Mesh reconstruction, coarsening, the CLI, and **facet recovery** (the hard second
+half of CDT) remain scheduled — see [`openspec/`](openspec/) for the roadmap and
 [`openspec/project.md`](openspec/project.md) for context.
 
-Builds CPU-only with zero dependencies; the suite (100 tests + pure-C ABI smoke
+Builds CPU-only with zero dependencies; the suite (107 tests + pure-C ABI smoke
 test) is green across the default, `-Werror`, ASan, and single-precision mobile
 profiles.
 
