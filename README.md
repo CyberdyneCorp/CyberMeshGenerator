@@ -121,11 +121,18 @@ weighted Delaunay).
 refines an existing mesh; `cmg::coarsen::coarsen` removes interior vertices to
 decimate while keeping the boundary.
 
-The one hard piece left on the roadmap is **facet recovery** (the second half of
-CDT) — see [`openspec/`](openspec/) for the roadmap and
-[`openspec/project.md`](openspec/project.md) for context.
+**Quality metrics + self-intersection detection — landed.**
+`cmg::quality::report` gives radius-edge / dihedral / volume statistics, a dihedral
+histogram, and the worst elements; `cmg::detect::self_intersections` finds crossing
+PLC facets via exact-predicate (Guigue-Devillers) triangle-triangle tests.
 
-Builds CPU-only with zero dependencies; the suite (114 tests + pure-C ABI smoke
+Two hard cores are **deliberately deferred with evidence**: 3-D **shape/radius-edge
+refinement** (measured to diverge to thousands of Steiner points at bounds 2.0-3.0 —
+needs queue-based Ruppert + encroachment + sliver handling) and **facet-interior
+recovery** (needs per-facet 2-D Delaunay + conforming refinement). See
+[`openspec/`](openspec/) for the roadmap.
+
+Builds CPU-only with zero dependencies; the suite (120 tests + pure-C ABI smoke
 test) is green across the default, `-Werror`, ASan, and single-precision mobile
 profiles.
 
