@@ -106,6 +106,7 @@ add_library(cmg
     src/delaunay/incremental.cpp
     src/constrained/tetrahedralize_plc.cpp
     src/quality/refine.cpp
+    src/sizing/background.cpp
     src/backend/dispatch.cpp
     src/predicates/robust.cpp
     src/predicates/predicates.cpp

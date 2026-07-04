@@ -65,6 +65,7 @@ expected<Mesh, MeshError> remesh(const std::vector<Point3>& pts, const PLC* plc,
                                  MeshOptions base) {
     base.quality.reset();
     base.max_volume.reset();
+    base.sizing = nullptr; // clear ALL refinement triggers to avoid recursion
     if (plc) {
         PLC work = *plc;
         work.points = pts;
@@ -89,7 +90,24 @@ double extent_of(const std::vector<Point3>& pts) {
 expected<Mesh, MeshError> refine(std::vector<Point3> points, const PLC* plc,
                                  const MeshOptions& opts) {
     const bool has_vol = opts.max_volume.has_value();
-    const double bound_vol = has_vol ? *opts.max_volume : 0.0;
+    const double global_vol = has_vol ? *opts.max_volume : 0.0;
+    const bool has_sizing = static_cast<bool>(opts.sizing);
+    constexpr double kRegularTetVolPerEdge3 = 1.0 / (6.0 * 1.41421356237309515); // 1/(6√2)
+
+    // Per-tetrahedron volume target: the tighter of the global max-volume and the
+    // sizing-derived target (h³/6√2) at the tet centroid. Returns <= 0 if the tet
+    // is unconstrained here.
+    auto target_volume = [&](const Point3& c) -> double {
+        double t = has_vol ? global_vol : 0.0;
+        if (has_sizing) {
+            double h = opts.sizing(c);
+            if (h > 0) {
+                double sv = h * h * h * kRegularTetVolPerEdge3;
+                t = (t > 0) ? std::min(t, sv) : sv;
+            }
+        }
+        return t;
+    };
     const std::size_t budget =
         opts.steiner_budget ? static_cast<std::size_t>(*opts.steiner_budget)
                             : kDefaultBudget;
@@ -127,22 +145,23 @@ expected<Mesh, MeshError> refine(std::vector<Point3> points, const PLC* plc,
         // so they are never targeted. (Shape / radius-edge refinement is deferred:
         // circumcenter insertion on slivers diverges without sliver + encroachment
         // handling, so this increment does not attempt it.)
-        if (!has_vol) break; // nothing to refine without a volume bound
+        if (!has_vol && !has_sizing) break; // nothing to refine against
         struct Bad { double key; Point3 site; };
         std::vector<Bad> bad;
         for (const auto& t : mesh.tetrahedra) {
             const Point3 &a = mesh.points[t[0]], &b = mesh.points[t[1]],
                          &c = mesh.points[t[2]], &d = mesh.points[t[3]];
+            Point3 ctr{static_cast<Real>((a.x + b.x + c.x + d.x) / 4),
+                       static_cast<Real>((a.y + b.y + c.y + d.y) / 4),
+                       static_cast<Real>((a.z + b.z + c.z + d.z) / 4)};
+            double bound_vol = target_volume(ctr);
+            if (bound_vol <= 0) continue; // unconstrained here
             double vol = tet_volume(a, b, c, d);
             if (vol <= bound_vol) continue;
             Point3 cc;
             double R = 0;
             bool have_cc = circumcenter(a, b, c, d, cc, R) && cc_admissible(cc, R);
-            Point3 site = (have_cc && inside_domain(mesh, cc))
-                              ? cc
-                              : Point3{static_cast<Real>((a.x + b.x + c.x + d.x) / 4),
-                                       static_cast<Real>((a.y + b.y + c.y + d.y) / 4),
-                                       static_cast<Real>((a.z + b.z + c.z + d.z) / 4)};
+            Point3 site = (have_cc && inside_domain(mesh, cc)) ? cc : ctr;
             bad.push_back({vol, site});
         }
         if (bad.empty()) break;

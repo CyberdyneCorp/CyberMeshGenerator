@@ -55,9 +55,9 @@ std::vector<Point3> cube_corners() {
 std::vector<Point3> cloud(int n, unsigned seed) {
     std::vector<Point3> pts;
     unsigned s = seed;
-    auto next = [&] {
+    auto next = [&]() -> Real {
         s = s * 1664525u + 1013904223u;
-        return (s >> 8) / double(1u << 24); // [0,1)
+        return static_cast<Real>((s >> 8) / double(1u << 24)); // [0,1)
     };
     for (int i = 0; i < n; ++i) pts.push_back({next(), next(), next()});
     return pts;
@@ -85,12 +85,13 @@ CMG_TEST("random cloud satisfies the empty-circumsphere property") {
 CMG_TEST("cospherical points produce a valid tetrahedralization") {
     // 12 points on a sphere + center: a strong cospherical degeneracy.
     std::vector<Point3> pts;
-    const double g = 1.618033988749895;
+    const Real g = static_cast<Real>(1.618033988749895);
     for (int s0 : {-1, 1})
         for (int s1 : {-1, 1}) {
-            pts.push_back({0, double(s0), double(s1) * g});
-            pts.push_back({double(s0), double(s1) * g, 0});
-            pts.push_back({double(s1) * g, 0, double(s0)});
+            Real a = static_cast<Real>(s0), b = static_cast<Real>(s1) * g;
+            pts.push_back({0, a, b});
+            pts.push_back({a, b, 0});
+            pts.push_back({b, 0, a});
         }
     pts.push_back({0, 0, 0});
     auto r = delaunay(pts, {});

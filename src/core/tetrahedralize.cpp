@@ -54,7 +54,8 @@ expected<Mesh, MeshError> delaunay(std::span<const Point3> points,
                                     "non-coplanar points"});
     }
 
-    const bool refine_requested = opts.quality.has_value() || opts.max_volume;
+    const bool refine_requested =
+        opts.quality.has_value() || opts.max_volume || opts.sizing;
 
     // Fast path for the irreducible unweighted 4-point case (no refinement).
     if (points.size() == 4 && !opts.weighted && !refine_requested) {
@@ -88,7 +89,7 @@ expected<Mesh, MeshError> tetrahedralize(const PLC& in, const MeshOptions& opts)
     }
 
     // Faceted PLC: boundary-conforming tetrahedralization; refine if requested.
-    if (opts.quality.has_value() || opts.max_volume) {
+    if (opts.quality.has_value() || opts.max_volume || opts.sizing) {
         return quality::refine(in.points, &in, opts);
     }
     return cdt::tetrahedralize_plc(in, opts);
