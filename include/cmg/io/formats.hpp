@@ -55,4 +55,17 @@ WriteResult write_vtk(const std::string& path, const Mesh& mesh);
 expected<Mesh, MeshError> read_medit(const std::string& path);
 WriteResult write_medit(const std::string& path, const Mesh& mesh);
 
+// --- Constraint / sizing files --------------------------------------------
+// .vol: a per-tetrahedron maximum volume (for -r refinement). Returns one value
+// per tetrahedron; a zero or negative value means "unconstrained".
+expected<std::vector<double>, MeshError> read_vol(const std::string& path,
+                                                  std::size_t num_tets);
+WriteResult write_vol(const std::string& path, const std::vector<double>& vols,
+                      int index_base);
+
+// .mtr: a per-node sizing metric (target edge length). Returns one value per node.
+expected<std::vector<double>, MeshError> read_mtr(const std::string& path);
+WriteResult write_mtr(const std::string& path,
+                      const std::vector<double>& sizes);
+
 } // namespace cmg::io

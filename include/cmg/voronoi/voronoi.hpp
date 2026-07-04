@@ -1,6 +1,7 @@
 // CyberMeshGenerator — Voronoi diagram (dual of the Delaunay tetrahedralization).
 #pragma once
 
+#include <span>
 #include <vector>
 
 #include "cmg/core/geometry.hpp"
@@ -31,5 +32,12 @@ struct VoronoiDiagram {
 
 /// Build the Voronoi diagram of a Delaunay mesh (tets stored orient3d(v0..v3) < 0).
 VoronoiDiagram build(const Mesh& delaunay);
+
+/// Build the power (weighted / Laguerre) diagram: the dual of a weighted-Delaunay
+/// mesh, using each tetrahedron's orthocenter (weighted circumcenter) as the
+/// Voronoi vertex instead of the circumcenter. `weights[i]` is the weight of input
+/// vertex i (size == mesh.points.size()). Edges and cells follow the same duality.
+VoronoiDiagram build_power(const Mesh& weighted_delaunay,
+                           std::span<const double> weights);
 
 } // namespace cmg::voronoi
