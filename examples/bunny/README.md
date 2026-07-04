@@ -1,8 +1,10 @@
 # Stanford Bunny example — watertight STL → **solid** tetrahedral mesh
 
-Loads the Stanford Bunny (`Stanford_Bunny_sample.stl`, a binary STL), tetrahedralizes
-its **solid interior** with CyberMeshGenerator through the Python (`cybermesh`)
-binding, and renders the surface next to a cutaway of the volumetric mesh.
+Loads the Stanford Bunny (`Stanford_Bunny_sample.stl`, a binary STL) natively via
+`cybermesh.read_plc` — no hand-written STL unpacking; the triangle corners are read
+back with `plc.points[plc.triangles]`. It then tetrahedralizes the **solid interior**
+with CyberMeshGenerator through the Python (`cybermesh`) binding, and renders the
+surface next to a cutaway of the volumetric mesh.
 
 ![comparison](bunny_comparison.png)
 

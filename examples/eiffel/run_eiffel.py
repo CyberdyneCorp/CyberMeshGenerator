@@ -57,13 +57,11 @@ def find_tetgen():
     return None
 
 
-def read_ascii_stl(path: Path):
-    tri = []
-    for line in path.read_text().splitlines():
-        s = line.split()
-        if len(s) == 4 and s[0] == "vertex":
-            tri.append((float(s[1]), float(s[2]), float(s[3])))
-    return np.asarray(tri).reshape(-1, 3, 3)
+def read_stl_corners(path: Path):
+    """Load the STL natively (cm.read_plc — ASCII or binary) and read its geometry
+    back through the accessors as a (T, 3, 3) triangle-corner array."""
+    plc = cm.read_plc(str(path))
+    return plc.points[plc.triangles]
 
 
 def cluster_decimate(corners, grid=GRID):
@@ -105,15 +103,10 @@ def run_tetgen(binary, P):
     ele = Path("/tmp/eiffel_cmp.1.ele")
     if not ele.exists():
         return None
-    L = [l for l in ele.read_text().splitlines() if l.strip() and not l.startswith("#")]
-    T = np.array([list(map(int, L[i + 1].split()[1:5]))
-                  for i in range(int(L[0].split()[0]))])
-    T -= T.min()
-    Ln = [l for l in Path("/tmp/eiffel_cmp.1.node").read_text().splitlines()
-          if l.strip() and not l.startswith("#")]
-    TP = np.array([list(map(float, Ln[i + 1].split()[1:4]))
-                   for i in range(int(Ln[0].split()[0]))])
-    return TP, T, dt
+    # Load TetGen's output through the native mesh reader (.ele + companion .node) —
+    # no hand-parsing of the TetGen index format.
+    tg = cm.read_mesh(str(ele))
+    return tg.points, tg.tetrahedra, dt
 
 
 def set_equal(ax, V):
@@ -155,8 +148,8 @@ def render_dt(ax, P, T, title, cmap):
 
 def main():
     stl = find_stl()
-    print("Reading", stl.name, "...")
-    corners = read_ascii_stl(stl)
+    print("Loading", stl.name, "natively (cm.read_plc) ...")
+    corners = read_stl_corners(stl)
     print(f"  {len(corners)} triangles (full)")
     P, F = cluster_decimate(corners)
     print(f"  decimated (grid {GRID}): {len(P)} verts, {len(F)} triangles")

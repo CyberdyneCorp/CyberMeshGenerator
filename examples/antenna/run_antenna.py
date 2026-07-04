@@ -34,36 +34,33 @@ OBJ = HERE / "Antenna.obj"
 TEX = HERE / "Antenna.jpg"
 
 
-def parse_obj(path: Path):
-    """Return vertices (V,3), texcoords (T,2), and triangles as
-    (vertex_index[3], texcoord_index[3]) — polygons are fan-triangulated."""
-    verts, texs, tris = [], [], []
+def parse_obj_texture(path: Path):
+    """Texture channel only: texcoords (T,2) and per-triangle UV-index triples,
+    fan-triangulated in the SAME order as the native loader's ``plc.triangles``
+    (``v0, v[i-1], v[i]``). The OBJ *geometry* is loaded natively via
+    ``cm.read_plc`` — the loader drops texture coords by design, so this reads just
+    the UVs needed to color the rendered surface."""
+    texs, tex_tris = [], []
     for line in path.read_text().splitlines():
-        if line.startswith("v "):
-            p = line.split()
-            verts.append((float(p[1]), float(p[2]), float(p[3])))
-        elif line.startswith("vt "):
+        if line.startswith("vt "):
             p = line.split()
             texs.append((float(p[1]), float(p[2])))
         elif line.startswith("f "):
-            toks = line.split()[1:]
-            vs, ts = [], []
-            for tok in toks:
+            ts = []
+            for tok in line.split()[1:]:
                 a = tok.split("/")
-                vs.append(int(a[0]) - 1)
                 ts.append(int(a[1]) - 1 if len(a) > 1 and a[1] else 0)
-            for i in range(1, len(vs) - 1):  # fan-triangulate
-                tris.append(((vs[0], vs[i], vs[i + 1]),
-                             (ts[0], ts[i], ts[i + 1])))
-    return (np.asarray(verts, float), np.asarray(texs, float), tris)
+            for i in range(2, len(ts)):  # fan — matches fill_triangles()
+                tex_tris.append((ts[0], ts[i - 1], ts[i]))
+    return np.asarray(texs, float), tex_tris
 
 
-def face_texture_colors(texs, tris, tex_path: Path):
+def face_texture_colors(texs, tex_tris, tex_path: Path):
     """Sample the JPG texture at each triangle's average UV -> per-face RGB."""
     img = np.asarray(Image.open(tex_path).convert("RGB"))
     h, w = img.shape[:2]
-    cols = np.empty((len(tris), 3), float)
-    for k, (_, ti) in enumerate(tris):
+    cols = np.empty((len(tex_tris), 3), float)
+    for k, ti in enumerate(tex_tris):
         uv = texs[list(ti)].mean(axis=0)
         px = min(w - 1, max(0, int(uv[0] % 1.0 * (w - 1))))
         py = min(h - 1, max(0, int((1.0 - uv[1] % 1.0) * (h - 1))))
@@ -92,15 +89,15 @@ def shade(polys, colors, light=(0.4, 0.5, 0.75)):
     return out
 
 
-def render_original(ax, V, tris, colors):
-    polys = V[[list(vi) for vi, _ in tris]]
+def render_original(ax, V, tri_v, colors):
+    polys = V[tri_v]
     rgba = np.concatenate([colors, np.ones((len(colors), 1))], axis=1)
     pc = Poly3DCollection(polys, facecolors=shade(polys, rgba), edgecolors="none")
     pc.set_rasterized(True)
     ax.add_collection3d(pc)
     set_equal(ax, V)
     ax.set_title("Original textured surface\n"
-                 f"{len(V)} vertices · {len(tris)} triangles", fontsize=10)
+                 f"{len(V)} vertices · {len(tri_v)} triangles", fontsize=10)
 
 
 def render_tetmesh(ax, mesh):
@@ -136,10 +133,14 @@ def render_tetmesh(ax, mesh):
 
 
 def main():
-    print("Parsing", OBJ.name, "...")
-    V, VT, tris = parse_obj(OBJ)
-    colors = face_texture_colors(VT, tris, TEX)
-    print(f"  {len(V)} vertices, {len(tris)} triangles, texture {TEX.name}")
+    print("Loading", OBJ.name, "natively (cm.read_plc) ...")
+    plc = cm.read_plc(str(OBJ))          # native OBJ reader — no hand-parser
+    V = plc.points                        # (N, 3) float64 — mesh + render geometry
+    tri_v = plc.triangles                 # (M, 3) int32 — fan-triangulated facets
+    VT, tex_tris = parse_obj_texture(OBJ)  # texture channel (loader drops UVs)
+    assert len(tri_v) == len(tex_tris), (len(tri_v), len(tex_tris))
+    colors = face_texture_colors(VT, tex_tris, TEX)
+    print(f"  {len(V)} vertices, {len(tri_v)} triangles, texture {TEX.name}")
 
     cache = HERE / "_tetmesh_cache.npz"
     if cache.exists() and os.environ.get("CMG_NO_CACHE") is None:
@@ -158,7 +159,7 @@ def main():
 
     fig = plt.figure(figsize=(14, 5))
     for i, (title, fn) in enumerate((
-            ("original", lambda ax: render_original(ax, V, tris, colors)),
+            ("original", lambda ax: render_original(ax, V, tri_v, colors)),
             ("tetmesh", lambda ax: render_tetmesh(ax, mesh)))):
         ax = fig.add_subplot(1, 2, i + 1, projection="3d")
         ax.view_init(elev=12, azim=-75)
@@ -171,7 +172,7 @@ def main():
 
     # also individual panels
     for name, fn in (("antenna_original.png",
-                      lambda ax: render_original(ax, V, tris, colors)),
+                      lambda ax: render_original(ax, V, tri_v, colors)),
                      ("antenna_tetmesh.png",
                       lambda ax: render_tetmesh(ax, mesh))):
         f = plt.figure(figsize=(7, 6))

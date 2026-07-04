@@ -1,7 +1,9 @@
 # Eiffel Tower example — CyberMeshGenerator **vs TetGen**, head-to-head
 
 Tetrahedralizes the vertices of an Eiffel Tower STL with both **CyberMeshGenerator**
-and **real TetGen**, and compares the results.
+and **real TetGen**, and compares the results. The STL is loaded natively with
+`cybermesh.read_plc`, and TetGen's own output (`.ele` + `.node`) is read back with
+`cybermesh.read_mesh` — both sides go through the native loaders, no hand-parsing.
 
 ![comparison](eiffel_comparison.png)
 

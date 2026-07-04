@@ -20,7 +20,6 @@ Requires: numpy, matplotlib (Pillow not needed — the bunny STL has no texture)
 from __future__ import annotations
 
 import os
-import struct
 import time
 from collections import Counter
 from pathlib import Path
@@ -38,13 +37,14 @@ STL = HERE / "Stanford_Bunny_sample.stl"
 GRID = 34  # vertex-clustering resolution for meshing (higher = finer, slower)
 
 
-def read_binary_stl(path: Path):
-    """Return the (T, 3, 3) triangle-corner array from a binary STL."""
-    d = path.read_bytes()
-    n = struct.unpack("<I", d[80:84])[0]
-    rec = np.frombuffer(d[84:84 + 50 * n], dtype=np.uint8).reshape(n, 50)
-    fl = np.frombuffer(rec[:, :48].tobytes(), dtype="<f4").reshape(n, 4, 3)
-    return fl[:, 1:4, :].astype(np.float64)  # drop the per-facet normal
+def read_stl_corners(path: Path):
+    """Load the STL natively and return its (T, 3, 3) triangle-corner array.
+
+    ``cm.read_plc`` parses the STL (no hand-written binary unpacking); the loaded
+    PLC's geometry is read back through the accessors — ``plc.points`` (V, 3) and
+    ``plc.triangles`` (T, 3) — and indexed to per-corner coordinates."""
+    plc = cm.read_plc(str(path))
+    return plc.points[plc.triangles]  # (T, 3, 3)
 
 
 def cluster_decimate(corners, grid=GRID):
@@ -155,8 +155,8 @@ def render_tetmesh(ax, mesh):
 
 
 def main():
-    print("Reading", STL.name, "...")
-    corners = read_binary_stl(STL)
+    print("Loading", STL.name, "natively (cm.read_plc) ...")
+    corners = read_stl_corners(STL)
     print(f"  {len(corners)} triangles (full)")
     P, F = cluster_decimate(corners)
     print(f"  decimated (grid {GRID}): {len(P)} verts, {len(F)} triangles")
