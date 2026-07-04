@@ -55,6 +55,10 @@ WriteResult write_vtk(const std::string& path, const Mesh& mesh);
 expected<Mesh, MeshError> read_medit(const std::string& path);
 WriteResult write_medit(const std::string& path, const Mesh& mesh);
 
+expected<PLC, MeshError> read_obj(const std::string& path);       // Wavefront OBJ
+WriteResult write_obj(const std::string& path, const PLC& plc);
+WriteResult write_obj_mesh(const std::string& path, const Mesh& mesh);
+
 // --- Constraint / sizing files --------------------------------------------
 // .vol: a per-tetrahedron maximum volume (for -r refinement). Returns one value
 // per tetrahedron; a zero or negative value means "unconstrained".

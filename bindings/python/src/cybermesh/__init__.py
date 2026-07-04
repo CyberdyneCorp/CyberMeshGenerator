@@ -32,7 +32,7 @@ from __future__ import annotations
 import ctypes
 import ctypes.util
 import os
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Optional, Sequence
 
 import numpy as np
@@ -112,6 +112,24 @@ def _bind(lib: ctypes.CDLL) -> None:
     lib.cmg_mesh_face_markers.restype = _c_int_p
     lib.cmg_mesh_face_markers.argtypes = [ctypes.c_void_p]
 
+    lib.cmg_read_plc.restype = ctypes.c_int
+    lib.cmg_read_plc.argtypes = [
+        ctypes.c_char_p, _c_void_pp, ctypes.c_char_p, ctypes.c_size_t]
+    lib.cmg_read_points.restype = ctypes.c_int
+    lib.cmg_read_points.argtypes = [
+        ctypes.c_char_p, _c_void_pp, ctypes.c_char_p, ctypes.c_size_t]
+    lib.cmg_read_mesh.restype = ctypes.c_int
+    lib.cmg_read_mesh.argtypes = [
+        ctypes.c_char_p, _c_void_pp, ctypes.c_char_p, ctypes.c_size_t]
+    lib.cmg_write_mesh.restype = ctypes.c_int
+    lib.cmg_write_mesh.argtypes = [
+        ctypes.c_char_p, ctypes.c_void_p, ctypes.c_char_p, ctypes.c_size_t]
+    lib.cmg_write_plc.restype = ctypes.c_int
+    lib.cmg_write_plc.argtypes = [
+        ctypes.c_char_p, ctypes.c_void_p, ctypes.c_char_p, ctypes.c_size_t]
+    lib.cmg_plc_num_points.restype = ctypes.c_size_t
+    lib.cmg_plc_num_points.argtypes = [ctypes.c_void_p]
+
     lib.cmg_version.restype = ctypes.c_char_p
 
 
@@ -134,16 +152,30 @@ class Mesh:
     faces: np.ndarray           # (F, 3) int32
     tet_markers: np.ndarray     # (M,)   int32
     face_markers: np.ndarray    # (F,)   int32
+    # Underlying C ``cmg_mesh*`` (when this mesh came from the core). Retained so
+    # the mesh can be written back out via the C ABI, which has no mesh builder.
+    _handle: Optional[int] = field(default=None, repr=False, compare=False)
 
     @property
     def tets(self) -> np.ndarray:
         """Alias for :attr:`tetrahedra` (backwards-compatible name)."""
         return self.tetrahedra
 
+    def __del__(self) -> None:
+        handle = getattr(self, "_handle", None)
+        if handle:
+            _lib.cmg_mesh_destroy(handle)
+            self._handle = None
+
 
 def _mesh_from_handle(out: ctypes.c_void_p) -> Mesh:
-    """Copy the flattened C-side views into owning NumPy arrays, then free."""
-    handle = out
+    """Copy the flattened C-side views into owning NumPy arrays.
+
+    The mesh keeps ownership of the underlying ``cmg_mesh*`` (freed by
+    :meth:`Mesh.__del__`) so it can later be written out via the C ABI, which
+    exposes no mesh-from-arrays constructor. On any error the handle is freed.
+    """
+    handle = out.value if isinstance(out, ctypes.c_void_p) else out
     try:
         npts = _lib.cmg_mesh_num_points(handle)
         ntet = _lib.cmg_mesh_num_tets(handle)
@@ -169,10 +201,12 @@ def _mesh_from_handle(out: ctypes.c_void_p) -> Mesh:
 
         tet_markers = _markers(_lib.cmg_mesh_tet_markers(handle), ntet)
         face_markers = _markers(_lib.cmg_mesh_face_markers(handle), nfac)
-    finally:
+    except Exception:
         _lib.cmg_mesh_destroy(handle)
+        raise
     return Mesh(points=points, tetrahedra=tets, faces=faces,
-                tet_markers=tet_markers, face_markers=face_markers)
+                tet_markers=tet_markers, face_markers=face_markers,
+                _handle=handle)
 
 
 def _markers(ptr, n: int) -> np.ndarray:
@@ -184,10 +218,23 @@ def _markers(ptr, n: int) -> np.ndarray:
 class PLC:
     """A Piecewise-Linear Complex: the polyhedral input domain to mesh."""
 
-    def __init__(self) -> None:
-        self._handle = _lib.cmg_plc_create()
+    def __init__(self, _handle: Optional[int] = None) -> None:
+        if _handle is not None:
+            self._handle = _handle
+        else:
+            self._handle = _lib.cmg_plc_create()
         if not self._handle:
             raise MemoryError("cmg_plc_create failed")
+
+    @classmethod
+    def _from_handle(cls, handle: int) -> "PLC":
+        """Wrap an already-allocated ``cmg_plc*`` (e.g. one read from a file)."""
+        return cls(_handle=handle)
+
+    @property
+    def num_points(self) -> int:
+        """Number of vertices in the PLC point cloud."""
+        return int(_lib.cmg_plc_num_points(self._handle))
 
     def add_points(self, points: np.ndarray) -> "PLC":
         """Set the PLC vertex cloud from an (N, 3) array. Replaces any prior set."""
@@ -292,9 +339,66 @@ def delaunay(points: np.ndarray, options: Optional[MeshOptions] = None) -> Mesh:
     return _mesh_from_handle(out)
 
 
+def _read_plc_handle(fn, path: str) -> PLC:
+    """Shared body for read_plc / read_points: call `fn`, wrap the out handle."""
+    out = ctypes.c_void_p()
+    err = ctypes.create_string_buffer(256)
+    st = fn(str(path).encode(), ctypes.byref(out), err, 256)
+    _check(st, err)
+    return PLC._from_handle(out.value)
+
+
+def read_plc(path: str) -> PLC:
+    """Read a PLC boundary from a surface file (format inferred from extension)."""
+    return _read_plc_handle(_lib.cmg_read_plc, path)
+
+
+def read_points(path: str) -> PLC:
+    """Read a point set (``.node``) into a points-only PLC."""
+    return _read_plc_handle(_lib.cmg_read_points, path)
+
+
+def read_mesh(path: str) -> Mesh:
+    """Read a volumetric mesh (``.ele``/``.vtk``/``.mesh``)."""
+    out = ctypes.c_void_p()
+    err = ctypes.create_string_buffer(256)
+    st = _lib.cmg_read_mesh(str(path).encode(), ctypes.byref(out), err, 256)
+    _check(st, err)
+    return _mesh_from_handle(out)
+
+
+def write_mesh(path: str, mesh: Mesh) -> None:
+    """Write a mesh to `path`; the format is inferred from the extension.
+
+    Only meshes produced by the core (via :func:`tetrahedralize`,
+    :func:`delaunay`, or :func:`read_mesh`) can be written: the C ABI exposes no
+    constructor to rebuild a native mesh from raw NumPy arrays.
+    """
+    if not isinstance(mesh, Mesh):
+        raise TypeError("mesh must be a cybermesh.Mesh")
+    if not getattr(mesh, "_handle", None):
+        raise ValueError(
+            "this Mesh has no underlying C handle; only meshes produced by the "
+            "core (tetrahedralize/delaunay/read_mesh) can be written")
+    err = ctypes.create_string_buffer(256)
+    st = _lib.cmg_write_mesh(str(path).encode(), mesh._handle, err, 256)
+    _check(st, err)
+
+
+def write_plc(path: str, plc: PLC) -> None:
+    """Write a PLC to `path`; the format is inferred from the extension."""
+    if not isinstance(plc, PLC):
+        raise TypeError("plc must be a cybermesh.PLC")
+    err = ctypes.create_string_buffer(256)
+    st = _lib.cmg_write_plc(str(path).encode(), plc._handle, err, 256)
+    _check(st, err)
+
+
 def version() -> str:
     """Return the underlying C++ core version string."""
     return _lib.cmg_version().decode()
 
 
-__all__ = ["PLC", "MeshOptions", "Mesh", "tetrahedralize", "delaunay", "version"]
+__all__ = ["PLC", "MeshOptions", "Mesh", "tetrahedralize", "delaunay",
+           "read_plc", "read_points", "read_mesh", "write_mesh", "write_plc",
+           "version"]

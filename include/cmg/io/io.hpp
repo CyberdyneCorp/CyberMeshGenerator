@@ -33,6 +33,7 @@ enum class Format {
     Ply,   ///< .ply   — Stanford PLY surface (ASCII)
     Vtk,   ///< .vtk   — legacy VTK
     Medit, ///< .mesh  — Medit
+    Obj,   ///< .obj   — Wavefront OBJ surface
 };
 
 /// Success type for writers (cmg::expected cannot hold void on C++20).

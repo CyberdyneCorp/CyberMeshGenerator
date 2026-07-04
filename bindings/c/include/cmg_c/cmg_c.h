@@ -99,6 +99,21 @@ const int* cmg_mesh_faces(const cmg_mesh*);
 const int* cmg_mesh_tet_markers(const cmg_mesh*);
 const int* cmg_mesh_face_markers(const cmg_mesh*);
 
+/* --- file loading / saving (format inferred from the extension) --------- */
+/* Read a PLC boundary from a surface file (.poly/.smesh/.stl/.obj/.off/.ply).
+ * On CMG_OK, *out receives a plc handle to free with cmg_plc_destroy. */
+cmg_status cmg_read_plc(const char* path, cmg_plc** out, char* errbuf, size_t len);
+/* Read a point set from a .node file into a new PLC (points only). */
+cmg_status cmg_read_points(const char* path, cmg_plc** out, char* errbuf, size_t len);
+/* Read a volumetric mesh (.ele + companion .node, or .vtk / .mesh). */
+cmg_status cmg_read_mesh(const char* path, cmg_mesh** out, char* errbuf, size_t len);
+/* Write a mesh / PLC to a path; the format is inferred from the extension. */
+cmg_status cmg_write_mesh(const char* path, const cmg_mesh*, char* errbuf, size_t len);
+cmg_status cmg_write_plc(const char* path, const cmg_plc*, char* errbuf, size_t len);
+
+/* Number of points in a PLC (e.g. one just read from a file). */
+size_t cmg_plc_num_points(const cmg_plc*);
+
 /* Library version string, e.g. "0.1.0". */
 const char* cmg_version(void);
 

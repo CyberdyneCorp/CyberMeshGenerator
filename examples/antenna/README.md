@@ -13,9 +13,13 @@ original textured surface next to the volumetric tetrahedral mesh.
   surface vertices (**62,405 tetrahedra**), shown as a cutaway (the lower-z half's
   boundary faces) so the interior tetrahedra are visible.
 
-CyberMeshGenerator has no OBJ reader (its native/interchange formats are
-`.node`/`.poly`/`.smesh`/`.ele`/STL/OFF/PLY/VTK/Medit), so the OBJ is parsed in
-Python and its vertices are fed to `cybermesh.delaunay`. The result is a genuine
+> **Now natively loadable.** CyberMeshGenerator gained a Wavefront OBJ reader and
+> Python file I/O, so `cybermesh.read_plc("Antenna.obj")` loads the surface directly
+> (no hand-parser). This example still parses in Python only because it feeds the
+> *vertices* to `delaunay` (an open truss has no closed interior to carve).
+
+Historically CyberMeshGenerator had no OBJ reader, so the OBJ is parsed in Python and
+its vertices are fed to `cybermesh.delaunay`. The result is a genuine
 tetrahedralization of the real 8.8k-vertex point set (~19 s on one CPU core; cached
 to `_tetmesh_cache.npz` for fast re-renders).
 

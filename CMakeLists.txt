@@ -131,6 +131,7 @@ add_library(cmg
     src/io/ply.cpp
     src/io/vtk.cpp
     src/io/medit.cpp
+    src/io/obj.cpp
 )
 add_library(cmg::cmg ALIAS cmg)
 

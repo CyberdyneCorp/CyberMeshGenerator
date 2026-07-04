@@ -10,6 +10,7 @@
 #include <vector>
 
 #include "cmg/cmg.hpp"
+#include "cmg/io/io.hpp"
 
 // Opaque handle definitions.
 struct cmg_plc { cmg::PLC value; };
@@ -208,6 +209,95 @@ const int* cmg_mesh_tet_markers(const cmg_mesh* m) {
 }
 const int* cmg_mesh_face_markers(const cmg_mesh* m) {
     return (m && !m->value.face_markers.empty()) ? m->value.face_markers.data() : nullptr;
+}
+
+/* --- file loading / saving ---------------------------------------------- */
+
+cmg_status cmg_read_plc(const char* path, cmg_plc** out, char* errbuf, size_t len) {
+    if (out) *out = nullptr;
+    if (!path || !out) return CMG_ERR_INVALID_INPUT;
+    try {
+        auto r = cmg::io::read_plc(path);
+        if (!r) {
+            set_err(errbuf, len, r.error().message);
+            return to_status(r.error().code);
+        }
+        *out = new cmg_plc{std::move(*r)};
+        return CMG_OK;
+    } catch (const std::exception& e) {
+        set_err(errbuf, len, e.what());
+        return CMG_ERR_INTERNAL;
+    }
+}
+
+cmg_status cmg_read_points(const char* path, cmg_plc** out, char* errbuf, size_t len) {
+    if (out) *out = nullptr;
+    if (!path || !out) return CMG_ERR_INVALID_INPUT;
+    try {
+        auto r = cmg::io::read_points(path);
+        if (!r) {
+            set_err(errbuf, len, r.error().message);
+            return to_status(r.error().code);
+        }
+        auto* h = new cmg_plc{};
+        h->value.points = std::move(*r);
+        *out = h;
+        return CMG_OK;
+    } catch (const std::exception& e) {
+        set_err(errbuf, len, e.what());
+        return CMG_ERR_INTERNAL;
+    }
+}
+
+cmg_status cmg_read_mesh(const char* path, cmg_mesh** out, char* errbuf, size_t len) {
+    if (out) *out = nullptr;
+    if (!path || !out) return CMG_ERR_INVALID_INPUT;
+    try {
+        auto r = cmg::io::read_mesh(path);
+        if (!r) {
+            set_err(errbuf, len, r.error().message);
+            return to_status(r.error().code);
+        }
+        *out = flatten(std::move(*r));
+        return CMG_OK;
+    } catch (const std::exception& e) {
+        set_err(errbuf, len, e.what());
+        return CMG_ERR_INTERNAL;
+    }
+}
+
+cmg_status cmg_write_mesh(const char* path, const cmg_mesh* m, char* errbuf, size_t len) {
+    if (!path || !m) return CMG_ERR_INVALID_INPUT;
+    try {
+        auto r = cmg::io::write_mesh(path, m->value);
+        if (!r) {
+            set_err(errbuf, len, r.error().message);
+            return to_status(r.error().code);
+        }
+        return CMG_OK;
+    } catch (const std::exception& e) {
+        set_err(errbuf, len, e.what());
+        return CMG_ERR_INTERNAL;
+    }
+}
+
+cmg_status cmg_write_plc(const char* path, const cmg_plc* p, char* errbuf, size_t len) {
+    if (!path || !p) return CMG_ERR_INVALID_INPUT;
+    try {
+        auto r = cmg::io::write_plc(path, p->value);
+        if (!r) {
+            set_err(errbuf, len, r.error().message);
+            return to_status(r.error().code);
+        }
+        return CMG_OK;
+    } catch (const std::exception& e) {
+        set_err(errbuf, len, e.what());
+        return CMG_ERR_INTERNAL;
+    }
+}
+
+size_t cmg_plc_num_points(const cmg_plc* p) {
+    return p ? p->value.points.size() : 0;
 }
 
 const char* cmg_version(void) { return CMG_VERSION_STRING; }
