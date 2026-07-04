@@ -8,6 +8,7 @@
 // return MeshErrorCode::NotImplemented rather than a wrong or partial mesh.
 #include "cmg/api.hpp"
 
+#include "cmg/delaunay/incremental.hpp"
 #include "cmg/predicates/robust.hpp"
 
 namespace cmg {
@@ -50,13 +51,9 @@ expected<Mesh, MeshError> delaunay(std::span<const Point3> points,
                                     "a 3-D tetrahedralization needs at least 4 "
                                     "non-coplanar points"});
     }
-    if (opts.weighted) {
-        return unexpected(MeshError{
-            MeshErrorCode::NotImplemented,
-            "weighted (regular) Delaunay is scheduled for Phase 1"});
-    }
 
-    if (points.size() == 4) {
+    // Fast path for the irreducible unweighted 4-point case.
+    if (points.size() == 4 && !opts.weighted) {
         if (robust::orient3d(points[0], points[1], points[2], points[3]) == 0) {
             return unexpected(MeshError{MeshErrorCode::InvalidInput,
                                         "the four input points are coplanar"});
@@ -64,10 +61,8 @@ expected<Mesh, MeshError> delaunay(std::span<const Point3> points,
         return single_tet(points, opts.index_base);
     }
 
-    return unexpected(MeshError{
-        MeshErrorCode::NotImplemented,
-        "incremental Delaunay for n > 4 points lands in Phase 1 "
-        "(delaunay-tetrahedralization)"});
+    // General case: incremental Bowyer-Watson (Phase 1 kernel).
+    return dt::incremental(points, opts);
 }
 
 expected<Mesh, MeshError> tetrahedralize(const PLC& in, const MeshOptions& opts) {

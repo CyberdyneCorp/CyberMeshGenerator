@@ -7,6 +7,7 @@
 
 #include <optional>
 #include <string_view>
+#include <vector>
 
 #include "cmg/core/error.hpp"
 #include "cmg/core/expected.hpp"
@@ -49,6 +50,16 @@ struct MeshOptions {
     Real coplanar_tolerance = static_cast<Real>(1e-8); ///< -T#: epsilon
 
     bool emit_neighbors = false; ///< -n: populate Mesh::neighbors
+
+    // BRIO-Hilbert spatial sort of the insertion order (-b analogue). Disabling
+    // inserts in input order; the result stays a valid Delaunay mesh either way.
+    bool spatial_sort = true;
+    unsigned long long sort_seed = 1; ///< makes BRIO deterministic per run
+
+    // Per-point weights for weighted (regular) Delaunay. Used only when
+    // `weighted` is set; size must equal the point count. Each weight w lifts its
+    // point to height x²+y²+z²−w.
+    std::vector<Real> weights;
 
     /// Parse a TetGen-style switch string (without the leading dash) into typed
     /// options. Returns a ParseError on an unknown or incompatible combination

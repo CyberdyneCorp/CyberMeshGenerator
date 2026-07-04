@@ -47,16 +47,23 @@ auto opts = MeshOptions::from_switches("pq1.414a0.1");   // TetGen-compatible
 
 ## Status
 
-**Phase 0 (foundation) — in progress.** The typed API, robust predicates, build
-profiles, backend-dispatch and binding architecture, and the TetGen oracle harness
-are established; the incremental Delaunay kernel and every meshing capability are
-scheduled as their own OpenSpec changes. See
-[`openspec/`](openspec/) for the full spec-driven roadmap and
+**Phase 1 (Delaunay tetrahedralization) — landed.** On top of the Phase 0
+foundation (typed API, robust predicates, build profiles, backend-dispatch and
+binding architecture, TetGen oracle harness), the incremental **Bowyer-Watson**
+Delaunay kernel is implemented: BRIO-Hilbert-ordered insertion, exact-predicate
+point location and cavity, convex-hull faces, optional neighbor adjacency, and the
+weighted (regular) DT variant. `delaunay()` now meshes arbitrary point sets.
+
+Constrained meshing, quality refinement, sizing, optimization, Voronoi, file I/O
+and the CLI remain scheduled as their own OpenSpec changes — see
+[`openspec/`](openspec/) for the roadmap and
 [`openspec/project.md`](openspec/project.md) for context.
 
-The foundation builds CPU-only with zero dependencies and its test suite is green,
-including a pure-C smoke test of the ABI shim. Larger inputs return
-`MeshErrorCode::NotImplemented` rather than a wrong mesh until Phase 1 lands.
+Builds CPU-only with zero dependencies; the suite (21 tests + pure-C ABI smoke
+test) is green across the default, `-Werror`, ASan, and single-precision mobile
+profiles. The Delaunay output is validated by its defining invariants —
+positive volume and the empty-circumsphere property over all vertices — including
+cospherical-degeneracy and weighted cases.
 
 ## Build
 

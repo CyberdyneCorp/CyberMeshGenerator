@@ -74,12 +74,14 @@ CMG_TEST("fewer than four points is an InvalidInput error, not a crash") {
     CMG_CHECK(r.error().code == MeshErrorCode::InvalidInput);
 }
 
-CMG_TEST("larger point sets defer with NotImplemented, never a wrong mesh") {
+CMG_TEST("five-point set tetrahedralizes via the Phase 1 kernel") {
+    // Phase 0 returned NotImplemented here; Phase 1's incremental kernel now
+    // produces a real mesh for n > 4.
     std::vector<Point3> pts{{0, 0, 0}, {1, 0, 0}, {0, 1, 0},
                             {0, 0, 1}, {1, 1, 1}};
     auto r = delaunay(pts, {});
-    CMG_CHECK(!r);
-    CMG_CHECK(r.error().code == MeshErrorCode::NotImplemented);
+    CMG_CHECK(bool(r));
+    CMG_CHECK(r->tet_count() >= 2);
 }
 
 CMG_TEST("empty PLC is rejected") {
