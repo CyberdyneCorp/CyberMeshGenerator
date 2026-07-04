@@ -129,6 +129,12 @@ def _bind(lib: ctypes.CDLL) -> None:
         ctypes.c_char_p, ctypes.c_void_p, ctypes.c_char_p, ctypes.c_size_t]
     lib.cmg_plc_num_points.restype = ctypes.c_size_t
     lib.cmg_plc_num_points.argtypes = [ctypes.c_void_p]
+    lib.cmg_plc_points.restype = _c_double_p
+    lib.cmg_plc_points.argtypes = [ctypes.c_void_p]
+    lib.cmg_plc_num_triangles.restype = ctypes.c_size_t
+    lib.cmg_plc_num_triangles.argtypes = [ctypes.c_void_p]
+    lib.cmg_plc_triangles.restype = _c_int_p
+    lib.cmg_plc_triangles.argtypes = [ctypes.c_void_p]
 
     lib.cmg_version.restype = ctypes.c_char_p
 
@@ -235,6 +241,24 @@ class PLC:
     def num_points(self) -> int:
         """Number of vertices in the PLC point cloud."""
         return int(_lib.cmg_plc_num_points(self._handle))
+
+    @property
+    def points(self) -> np.ndarray:
+        """The PLC vertices as an (N, 3) float64 array (e.g. read back from a file)."""
+        n = self.num_points
+        if not n:
+            return np.empty((0, 3), dtype=np.float64)
+        return np.ctypeslib.as_array(_lib.cmg_plc_points(self._handle),
+                                     (n, 3)).astype(np.float64).copy()
+
+    @property
+    def triangles(self) -> np.ndarray:
+        """The PLC facets fan-triangulated to an (M, 3) int32 index array."""
+        m = int(_lib.cmg_plc_num_triangles(self._handle))
+        if not m:
+            return np.empty((0, 3), dtype=np.int32)
+        return np.ctypeslib.as_array(_lib.cmg_plc_triangles(self._handle),
+                                     (m, 3)).astype(np.int32).copy()
 
     def add_points(self, points: np.ndarray) -> "PLC":
         """Set the PLC vertex cloud from an (N, 3) array. Replaces any prior set."""

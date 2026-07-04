@@ -15,13 +15,21 @@ Spec delta for the **language-bindings** capability:
   `cmg_read_points` (`.node`), `cmg_read_mesh` (`.ele`+`.node`/`.vtk`/`.mesh`),
   `cmg_write_mesh`, `cmg_write_plc`, and `cmg_plc_num_points`. Format is inferred
   from the extension; errors cross the boundary as codes + a message.
+- **C ABI (accessors)**: `cmg_plc_points` / `cmg_plc_num_triangles` /
+  `cmg_plc_triangles` read a loaded PLC's geometry back out (points as flat `xyz`,
+  facets fan-triangulated to a flat index array).
 - **Python**: `cybermesh.read_plc(path)` → `PLC`, `read_mesh(path)` → `Mesh`,
-  `read_points(path)` → `PLC`, `write_mesh(path, mesh)`, `write_plc(path, plc)`.
+  `read_points(path)` → `PLC`, `write_mesh(path, mesh)`, `write_plc(path, plc)`, plus
+  `PLC.points` (N×3) / `PLC.triangles` (M×3) accessors.
+- **Swift**: `CyberMesh.readPLC/readMesh/tetrahedralize/delaunay` and `PLC.points`/
+  `PLC.triangles` over the same C ABI, mirroring the Python surface (source-only —
+  no Swift toolchain in this environment; verified at the tested C-ABI layer).
 
 ## Impact
 
 - `mesh = cybermesh.tetrahedralize(cybermesh.read_plc("bunny.stl"), opts)` — no
-  external parser. The examples can drop their hand-written STL/OBJ readers.
+  external parser. The examples can drop their hand-written STL/OBJ readers, and
+  `examples/native_load` shows the file → mesh path end to end.
 
 ## Non-goals
 - **New formats** — this exposes the existing `cmg::io` set (OBJ is added by the

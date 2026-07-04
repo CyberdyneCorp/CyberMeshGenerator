@@ -32,3 +32,7 @@ examples/**/_*cache.npz
 # large example asset (user-provided)
 examples/eiffel/*.STL
 examples/eiffel/*.stl
+
+# native_load example writes these at runtime
+examples/native_load/cube.obj
+examples/native_load/cube.stl

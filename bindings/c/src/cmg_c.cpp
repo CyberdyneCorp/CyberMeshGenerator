@@ -13,7 +13,12 @@
 #include "cmg/io/io.hpp"
 
 // Opaque handle definitions.
-struct cmg_plc { cmg::PLC value; };
+struct cmg_plc {
+    cmg::PLC value;
+    // Flattened read-back caches (filled lazily by the accessors).
+    std::vector<double> pts_cache;
+    std::vector<int> tri_cache;
+};
 struct cmg_options { cmg::MeshOptions value; };
 struct cmg_mesh {
     cmg::Mesh value;
@@ -298,6 +303,43 @@ cmg_status cmg_write_plc(const char* path, const cmg_plc* p, char* errbuf, size_
 
 size_t cmg_plc_num_points(const cmg_plc* p) {
     return p ? p->value.points.size() : 0;
+}
+
+const double* cmg_plc_points(cmg_plc* p) {
+    if (!p) return nullptr;
+    p->pts_cache.clear();
+    p->pts_cache.reserve(p->value.points.size() * 3);
+    for (const auto& pt : p->value.points) {
+        p->pts_cache.push_back(static_cast<double>(pt.x));
+        p->pts_cache.push_back(static_cast<double>(pt.y));
+        p->pts_cache.push_back(static_cast<double>(pt.z));
+    }
+    return p->pts_cache.data();
+}
+
+static void fill_triangles(cmg_plc* p) {
+    p->tri_cache.clear();
+    for (const auto& f : p->value.facets)
+        for (const auto& poly : f.polygons) {
+            const auto& v = poly.vertices;
+            for (std::size_t i = 2; i < v.size(); ++i) { // fan-triangulate
+                p->tri_cache.push_back(v[0]);
+                p->tri_cache.push_back(v[i - 1]);
+                p->tri_cache.push_back(v[i]);
+            }
+        }
+}
+
+size_t cmg_plc_num_triangles(cmg_plc* p) {
+    if (!p) return 0;
+    fill_triangles(p);
+    return p->tri_cache.size() / 3;
+}
+
+const int* cmg_plc_triangles(cmg_plc* p) {
+    if (!p) return nullptr;
+    fill_triangles(p);
+    return p->tri_cache.data();
 }
 
 const char* cmg_version(void) { return CMG_VERSION_STRING; }

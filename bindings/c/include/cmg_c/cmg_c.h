@@ -111,8 +111,14 @@ cmg_status cmg_read_mesh(const char* path, cmg_mesh** out, char* errbuf, size_t 
 cmg_status cmg_write_mesh(const char* path, const cmg_mesh*, char* errbuf, size_t len);
 cmg_status cmg_write_plc(const char* path, const cmg_plc*, char* errbuf, size_t len);
 
-/* Number of points in a PLC (e.g. one just read from a file). */
+/* Read a PLC's geometry back out (e.g. one just read from a file). Points as a
+ * flat [x,y,z,...] array (3*num_points doubles); facets fan-triangulated to a flat
+ * [a,b,c,...] index array (3*num_triangles ints). Pointers are valid until the PLC
+ * is modified or destroyed. */
 size_t cmg_plc_num_points(const cmg_plc*);
+const double* cmg_plc_points(cmg_plc*);
+size_t cmg_plc_num_triangles(cmg_plc*);
+const int* cmg_plc_triangles(cmg_plc*);
 
 /* Library version string, e.g. "0.1.0". */
 const char* cmg_version(void);
