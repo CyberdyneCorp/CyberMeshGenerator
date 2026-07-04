@@ -82,6 +82,67 @@ cmg_status cmg_plc_set_points(cmg_plc* plc, const double* xyz, size_t count) {
     return CMG_OK;
 }
 
+cmg_status cmg_plc_add_facet(cmg_plc* plc, const int* idx, size_t count,
+                             int marker) {
+    if (!plc || (!idx && count)) return CMG_ERR_INVALID_INPUT;
+    if (count < 3) return CMG_ERR_INVALID_INPUT;
+    cmg::Facet facet;
+    cmg::Polygon poly;
+    poly.vertices.reserve(count);
+    for (size_t i = 0; i < count; ++i)
+        poly.vertices.push_back(static_cast<cmg::Index>(idx[i]));
+    facet.polygons.push_back(std::move(poly));
+    facet.marker = marker;
+    plc->value.facets.push_back(std::move(facet));
+    return CMG_OK;
+}
+
+cmg_status cmg_plc_add_hole(cmg_plc* plc, double x, double y, double z) {
+    if (!plc) return CMG_ERR_INVALID_INPUT;
+    plc->value.holes.push_back({static_cast<cmg::Real>(x),
+                                static_cast<cmg::Real>(y),
+                                static_cast<cmg::Real>(z)});
+    return CMG_OK;
+}
+
+cmg_status cmg_plc_add_region(cmg_plc* plc, double x, double y, double z,
+                              double attribute, double max_volume) {
+    if (!plc) return CMG_ERR_INVALID_INPUT;
+    cmg::Region region;
+    region.seed = {static_cast<cmg::Real>(x), static_cast<cmg::Real>(y),
+                   static_cast<cmg::Real>(z)};
+    region.attribute = static_cast<cmg::Real>(attribute);
+    region.max_volume = static_cast<cmg::Real>(max_volume);
+    plc->value.regions.push_back(std::move(region));
+    return CMG_OK;
+}
+
+cmg_status cmg_options_set_plc(cmg_options* o, int on) {
+    if (!o) return CMG_ERR_INVALID_INPUT;
+    o->value.plc = (on != 0);
+    return CMG_OK;
+}
+
+cmg_status cmg_options_set_max_volume(cmg_options* o, double v) {
+    if (!o) return CMG_ERR_INVALID_INPUT;
+    o->value.max_volume = static_cast<cmg::Real>(v);
+    return CMG_OK;
+}
+
+cmg_status cmg_options_set_quality(cmg_options* o, double radius_edge,
+                                   double min_dihedral) {
+    if (!o) return CMG_ERR_INVALID_INPUT;
+    o->value.quality = cmg::Quality{static_cast<cmg::Real>(radius_edge),
+                                    static_cast<cmg::Real>(min_dihedral)};
+    return CMG_OK;
+}
+
+cmg_status cmg_options_set_preserve_edges(cmg_options* o, int on) {
+    if (!o) return CMG_ERR_INVALID_INPUT;
+    o->value.preserve_edges = (on != 0);
+    return CMG_OK;
+}
+
 cmg_status cmg_options_from_switches(cmg_options* o, const char* sw,
                                      char* errbuf, size_t errbuf_len) {
     if (!o || !sw) return CMG_ERR_INVALID_INPUT;
@@ -142,6 +203,12 @@ size_t cmg_mesh_num_faces(const cmg_mesh* m) { return m ? m->value.face_count() 
 const double* cmg_mesh_points(const cmg_mesh* m) { return m ? m->points.data() : nullptr; }
 const int* cmg_mesh_tets(const cmg_mesh* m) { return m ? m->tets.data() : nullptr; }
 const int* cmg_mesh_faces(const cmg_mesh* m) { return m ? m->faces.data() : nullptr; }
+const int* cmg_mesh_tet_markers(const cmg_mesh* m) {
+    return (m && !m->value.tet_markers.empty()) ? m->value.tet_markers.data() : nullptr;
+}
+const int* cmg_mesh_face_markers(const cmg_mesh* m) {
+    return (m && !m->value.face_markers.empty()) ? m->value.face_markers.data() : nullptr;
+}
 
 const char* cmg_version(void) { return CMG_VERSION_STRING; }
 

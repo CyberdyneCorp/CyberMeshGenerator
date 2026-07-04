@@ -42,10 +42,38 @@ void cmg_mesh_destroy(cmg_mesh*);
 /* Set the PLC point cloud from a flat [x0,y0,z0, x1,y1,z1, ...] array. */
 cmg_status cmg_plc_set_points(cmg_plc*, const double* xyz, size_t count);
 
+/* Append a single-polygon facet whose boundary loop is the `count` vertex
+ * indices in `poly_vertex_indices` (a triangle when count==3, any polygon
+ * otherwise). The indices refer to points previously set via
+ * cmg_plc_set_points. `marker` is the boundary marker propagated to output
+ * faces. */
+cmg_status cmg_plc_add_facet(cmg_plc*, const int* poly_vertex_indices,
+                             size_t count, int marker);
+
+/* Append a volumetric hole seed point (interior of material to remove). */
+cmg_status cmg_plc_add_hole(cmg_plc*, double x, double y, double z);
+
+/* Append a material region seed at (x,y,z) with the given attribute and
+ * per-region maximum tetrahedron volume (negative => unconstrained). */
+cmg_status cmg_plc_add_region(cmg_plc*, double x, double y, double z,
+                              double attribute, double max_volume);
+
 /* Parse a TetGen-style switch string (without leading dash) into options. On
  * failure returns CMG_ERR_PARSE and fills errbuf. */
 cmg_status cmg_options_from_switches(cmg_options*, const char* switches,
                                      char* errbuf, size_t errbuf_len);
+
+/* --- typed option setters ----------------------------------------------- */
+/* Enable/disable PLC (boundary-conforming) meshing (-p). */
+cmg_status cmg_options_set_plc(cmg_options*, int on);
+/* Set the global maximum tetrahedron volume (-a#). */
+cmg_status cmg_options_set_max_volume(cmg_options*, double max_volume);
+/* Enable quality refinement (-q) with a maximum radius-edge ratio and a minimum
+ * dihedral angle (degrees). */
+cmg_status cmg_options_set_quality(cmg_options*, double radius_edge,
+                                   double min_dihedral);
+/* Recover PLC facet edges as mesh-edge chains. */
+cmg_status cmg_options_set_preserve_edges(cmg_options*, int on);
 
 /* --- meshing ------------------------------------------------------------ */
 /* Tetrahedralize the PLC. On CMG_OK, *out receives a mesh handle the caller must
@@ -66,6 +94,10 @@ size_t cmg_mesh_num_faces(const cmg_mesh*);
 const double* cmg_mesh_points(const cmg_mesh*);
 const int* cmg_mesh_tets(const cmg_mesh*);
 const int* cmg_mesh_faces(const cmg_mesh*);
+/* Per-tetrahedron region/material markers (num_tets ints) and per-face boundary
+ * markers (num_faces ints). Either may be NULL if the mesh carries none. */
+const int* cmg_mesh_tet_markers(const cmg_mesh*);
+const int* cmg_mesh_face_markers(const cmg_mesh*);
 
 /* Library version string, e.g. "0.1.0". */
 const char* cmg_version(void);

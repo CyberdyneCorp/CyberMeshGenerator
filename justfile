@@ -58,3 +58,15 @@ mobile:
 # Remove all build directories.
 clean:
     rm -rf build build-*
+
+# Build with the CUDA backend and run the suite on the local GPU.
+cuda:
+    cmake -S . -B build-cuda -DCMAKE_BUILD_TYPE=Release -DCMG_WITH_CUDA=ON
+    cmake --build build-cuda -j
+    ./build-cuda/tests/cmg_tests
+
+# Build the shared C ABI and run the Python binding test (needs python3 + numpy).
+python-test:
+    cmake -S . -B build-py -DCMG_BUILD_C_ABI=ON -DCMG_BUILD_SHARED=ON -DCMG_BUILD_TESTS=OFF -DCMG_BUILD_CLI=OFF
+    cmake --build build-py -j
+    CMG_C_LIB=$(find build-py -name 'libcmg_c.so' | head -1) python3 bindings/python/tests/test_cybermesh.py

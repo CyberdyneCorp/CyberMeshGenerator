@@ -19,7 +19,8 @@ option(CMG_BUILD_CLI     "Build the cmg command-line executable"  ON)
 option(CMG_ENABLE_ASAN   "Enable AddressSanitizer/UBSan"          OFF)
 option(CMG_WARNINGS_AS_ERRORS "Treat warnings as errors"          OFF)
 
-# Optional GPU acceleration backends (routed through NumPP's device layer).
+# Optional GPU acceleration backends. CUDA ships cmg's own device kernels; OpenCL/
+# Metal are scaffolded. (NumPP integration for a shared device registry is separate.)
 option(CMG_WITH_CUDA     "Enable optional CUDA GPU backend"       OFF)
 option(CMG_WITH_OPENCL   "Enable optional OpenCL GPU backend"     OFF)
 option(CMG_WITH_METAL    "Enable optional Metal GPU backend"      OFF)
@@ -40,15 +41,13 @@ option(CMG_SINGLE        "Use single-precision (float) REAL"      OFF)
 
 # -----------------------------------------------------------------------------
 # Flag reconciliation: a GPU backend requires the NumPP device substrate.
-# Enabling a GPU flag implies CMG_WITH_NUMPP and the matching NumPP backend flag;
-# configuration fails fast if NumPP is missing or lacks that backend.
+# CyberMeshGenerator ships its OWN GPU device kernels (CUDA today; OpenCL/Metal
+# scaffolded), so a GPU flag does NOT require NumPP. NumPP integration remains an
+# independent opt-in for sharing its device-dispatch registry across the stack.
+# When CMG_WITH_CUDA is on, enable the CUDA language for the .cu kernels.
 # -----------------------------------------------------------------------------
-if(CMG_WITH_CUDA OR CMG_WITH_OPENCL OR CMG_WITH_METAL)
-    if(NOT CMG_WITH_NUMPP)
-        message(STATUS "A GPU backend was requested; enabling CMG_WITH_NUMPP "
-                       "(GPU dispatch is routed through NumPP).")
-        set(CMG_WITH_NUMPP ON CACHE BOOL "" FORCE)
-    endif()
+if(CMG_WITH_CUDA)
+    enable_language(CUDA)
 endif()
 
 # -----------------------------------------------------------------------------
@@ -171,6 +170,14 @@ if(CMG_ENABLE_ASAN)
 endif()
 set_source_files_properties(src/predicates/predicates.cpp PROPERTIES
     COMPILE_OPTIONS "${_cmg_pred_opts}")
+
+# Real CUDA device kernels (built only with -DCMG_WITH_CUDA=ON). Generate
+# compute_80 PTX only ("80-virtual") so the driver JIT-forwards to newer GPUs
+# (e.g. Blackwell sm_120, which CUDA 12.0's nvcc cannot target directly).
+if(CMG_WITH_CUDA)
+    target_sources(cmg PRIVATE src/backend/cuda/orient3d.cu)
+    set_target_properties(cmg PROPERTIES CUDA_ARCHITECTURES "80-virtual")
+endif()
 
 if(CMG_ENABLE_ASAN)
     target_compile_options(cmg PUBLIC -fsanitize=address,undefined -fno-omit-frame-pointer)

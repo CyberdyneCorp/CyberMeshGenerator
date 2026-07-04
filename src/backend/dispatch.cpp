@@ -11,6 +11,9 @@
 #if CMG_WITH_NUMPP
 #include "numpp/backend/capability_registry.hpp"
 #endif
+#if CMG_WITH_CUDA
+#include "cmg/backend/cuda_kernels.hpp"
+#endif
 
 namespace cmg::backend {
 
@@ -38,9 +41,17 @@ bool should_offload(Op op, std::size_t problem_size) noexcept {
         g_last = Backend::Cpu;
         return false;
     }
-#if CMG_WITH_NUMPP && (CMG_WITH_CUDA || CMG_WITH_OPENCL || CMG_WITH_METAL)
-    // Defer to NumPP's registry for compiled-backend + present-device probing and
-    // the NUMPP_GPU_TARGET override; it also decides Metal-first on Apple.
+#if CMG_WITH_CUDA
+    // cmg's own CUDA device kernel: offload above the threshold when a device is
+    // present. (Checked before the NumPP registry so the built-in kernel is used.)
+    if (backend::cuda::available()) {
+        g_last = Backend::Cuda;
+        return true;
+    }
+#endif
+#if CMG_WITH_NUMPP && (CMG_WITH_OPENCL || CMG_WITH_METAL)
+    // Defer to NumPP's registry for other backends (compiled-backend + present-
+    // device probing, NUMPP_GPU_TARGET override, Metal-first on Apple).
     if (numpp::backend::capability_registry().has_usable_device()) {
         g_last = static_cast<Backend>(
             numpp::backend::capability_registry().selected_backend());

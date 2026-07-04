@@ -45,3 +45,16 @@ jobs:
       - run: cmake -S . -B build-mobile -DCMAKE_BUILD_TYPE=Release -DCMG_SINGLE=ON
       - run: cmake --build build-mobile -j
       - run: ctest --test-dir build-mobile --output-on-failure
+
+  python-bindings:
+    # Build the shared C ABI and run the Python (ctypes/NumPy) binding test.
+    # (The CUDA backend is validated locally on a GPU; standard runners have none.)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.11' }
+      - run: pip install numpy
+      - run: cmake -S . -B build-py -DCMG_BUILD_C_ABI=ON -DCMG_BUILD_SHARED=ON -DCMG_BUILD_TESTS=OFF -DCMG_BUILD_CLI=OFF
+      - run: cmake --build build-py -j
+      - run: CMG_C_LIB=$(find build-py -name 'libcmg_c.so' | head -1) python bindings/python/tests/test_cybermesh.py

@@ -3,6 +3,12 @@
 
 #include <mutex>
 
+#include "cmg/backend/config.hpp"
+#include "cmg/backend/dispatch.hpp"
+#if CMG_WITH_CUDA
+#include "cmg/backend/cuda_kernels.hpp"
+#endif
+
 namespace cmg::robust {
 
 namespace {
@@ -56,6 +62,45 @@ std::vector<double> orient3d_batch(std::span<const Point3> pts,
         out.push_back(
             orient3d(pts[t[0]], pts[t[1]], pts[t[2]], pts[t[3]]));
     }
+    return out;
+}
+
+std::vector<int> orient3d_signs(std::span<const Point3> pts,
+                                std::span<const Tetrahedron> candidates) {
+    ensure_initialized();
+    const std::size_t n = candidates.size();
+    std::vector<int> out(n);
+
+    auto exact_sign = [&](const Tetrahedron& t) {
+        double v = orient3d(pts[t[0]], pts[t[1]], pts[t[2]], pts[t[3]]);
+        return v > 0 ? 1 : (v < 0 ? -1 : 0);
+    };
+
+#if CMG_WITH_CUDA
+    // Offload the fast filter to the GPU above the threshold, then escalate the
+    // uncertain (near-zero) minority to the exact CPU predicate so the signs are
+    // identical to the pure-CPU path.
+    if (backend::should_offload(backend::Op::OrientFilter, n) &&
+        backend::cuda::available()) {
+        std::vector<double> xyz(pts.size() * 3);
+        for (std::size_t i = 0; i < pts.size(); ++i) {
+            xyz[3 * i] = pts[i].x;
+            xyz[3 * i + 1] = pts[i].y;
+            xyz[3 * i + 2] = pts[i].z;
+        }
+        std::vector<int> flat(n * 4);
+        for (std::size_t i = 0; i < n; ++i)
+            for (int k = 0; k < 4; ++k) flat[4 * i + k] = candidates[i][k];
+        backend::cuda::orient3d_signs(xyz.data(), static_cast<int>(pts.size()),
+                                      flat.data(), static_cast<int>(n),
+                                      out.data());
+        for (std::size_t i = 0; i < n; ++i)
+            if (out[i] == 0) out[i] = exact_sign(candidates[i]); // escalate
+        return out;
+    }
+#endif
+
+    for (std::size_t i = 0; i < n; ++i) out[i] = exact_sign(candidates[i]);
     return out;
 }
 
