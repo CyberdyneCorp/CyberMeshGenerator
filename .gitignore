@@ -27,4 +27,4 @@ dist/
 .vscode/
 
 # example generated cache
-examples/**/_tetmesh_cache.npz
+examples/**/_*cache.npz
