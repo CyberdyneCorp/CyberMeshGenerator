@@ -2,8 +2,13 @@
 # passes offline (iOS/Android + no-network CI contract). The Catch2 + live TetGen
 # oracle scaffold is added on top of this in the tetgen-oracle work when those
 # deps are available.
-add_executable(cmg_tests test_foundation.cpp test_delaunay.cpp)
+file(GLOB CMG_IO_TESTS CONFIGURE_DEPENDS io/test_*.cpp)
+add_executable(cmg_tests
+    test_foundation.cpp test_delaunay.cpp ${CMG_IO_TESTS} oracle/test_oracle.cpp)
 target_link_libraries(cmg_tests PRIVATE cmg::cmg)
 target_include_directories(cmg_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+# Frozen TetGen oracle golden data (no TetGen build needed at test time).
+target_compile_definitions(cmg_tests PRIVATE
+    CMG_GOLDEN_DIR="${CMAKE_CURRENT_SOURCE_DIR}/oracle/golden")
 
 add_test(NAME cmg_foundation COMMAND cmg_tests)

@@ -54,16 +54,23 @@ Delaunay kernel is implemented: BRIO-Hilbert-ordered insertion, exact-predicate
 point location and cavity, convex-hull faces, optional neighbor adjacency, and the
 weighted (regular) DT variant. `delaunay()` now meshes arbitrary point sets.
 
-Constrained meshing, quality refinement, sizing, optimization, Voronoi, file I/O
-and the CLI remain scheduled as their own OpenSpec changes — see
-[`openspec/`](openspec/) for the roadmap and
-[`openspec/project.md`](openspec/project.md) for context.
+**Phase 2 (file formats) — landed.** A `cmg::io` layer reads and writes TetGen's
+native containers (`.node`, `.poly`, `.smesh`, `.ele`, `.face`, `.edge`, `.neigh`)
+and the interchange formats (STL ASCII+binary, OFF, PLY, legacy VTK, Medit
+`.mesh`), extension-dispatched, with round-trip fidelity.
 
-Builds CPU-only with zero dependencies; the suite (21 tests + pure-C ABI smoke
+This unlocks the **live TetGen oracle**: the suite reads a real TetGen 1.6.0
+Delaunay output and confirms `delaunay()` produces the *identical* tetrahedralization
+(same sorted-tuple set) on a general-position cloud — the kernel is now validated
+against TetGen itself, not only its invariants.
+
+Constrained meshing, quality refinement, sizing, optimization, Voronoi and the CLI
+remain scheduled as their own OpenSpec changes — see [`openspec/`](openspec/) for
+the roadmap and [`openspec/project.md`](openspec/project.md) for context.
+
+Builds CPU-only with zero dependencies; the suite (66 tests + pure-C ABI smoke
 test) is green across the default, `-Werror`, ASan, and single-precision mobile
-profiles. The Delaunay output is validated by its defining invariants —
-positive volume and the empty-circumsphere property over all vertices — including
-cospherical-degeneracy and weighted cases.
+profiles.
 
 ## Build
 
