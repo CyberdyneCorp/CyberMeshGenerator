@@ -11,6 +11,7 @@
 #include "cmg/backend/config.hpp"
 #include "cmg/coarsen/coarsen.hpp"
 #include "cmg/simplify/simplify.hpp"
+#include "cmg/voxelize/voxelize.hpp"
 #include "cmg/reconstruct/reconstruct.hpp"
 #include "cmg/backend/dispatch.hpp"
 #include "cmg/core/error.hpp"

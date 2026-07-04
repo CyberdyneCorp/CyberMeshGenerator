@@ -20,6 +20,7 @@ struct cmg_plc {
     std::vector<int> tri_cache;
 };
 struct cmg_options { cmg::MeshOptions value; };
+struct cmg_voxels { cmg::voxelize::VoxelGrid value; };
 struct cmg_mesh {
     cmg::Mesh value;
     // Flattened, ABI-stable views computed once on creation.
@@ -236,6 +237,57 @@ cmg_status cmg_plc_simplify(const cmg_plc* in, int grid, cmg_plc** out,
         set_err(errbuf, len, e.what());
         return CMG_ERR_INTERNAL;
     }
+}
+
+cmg_status cmg_plc_voxelize(const cmg_plc* in, int resolution, int mode, int pad,
+                            cmg_voxels** out, char* errbuf, size_t len) {
+    if (out) *out = nullptr;
+    if (!in || !out) return CMG_ERR_INVALID_INPUT;
+    if (resolution < 1) {
+        set_err(errbuf, len, "resolution must be >= 1");
+        return CMG_ERR_INVALID_INPUT;
+    }
+    try {
+        cmg::voxelize::VoxelOptions o;
+        o.resolution = resolution;
+        o.pad = pad;
+        o.mode = (mode == 1) ? cmg::voxelize::VoxelMode::SignedDistance
+                             : cmg::voxelize::VoxelMode::Occupancy;
+        auto r = cmg::voxelize::voxelize(in->value, o);
+        if (!r) {
+            set_err(errbuf, len, r.error().message);
+            return to_status(r.error().code);
+        }
+        *out = new cmg_voxels{std::move(*r)};
+        return CMG_OK;
+    } catch (const std::exception& e) {
+        set_err(errbuf, len, e.what());
+        return CMG_ERR_INTERNAL;
+    }
+}
+
+void cmg_voxels_destroy(cmg_voxels* v) { delete v; }
+
+void cmg_voxels_dims(const cmg_voxels* v, int* nx, int* ny, int* nz) {
+    if (nx) *nx = v ? v->value.nx : 0;
+    if (ny) *ny = v ? v->value.ny : 0;
+    if (nz) *nz = v ? v->value.nz : 0;
+}
+
+void cmg_voxels_origin(const cmg_voxels* v, double* x, double* y, double* z) {
+    if (x) *x = v ? static_cast<double>(v->value.origin.x) : 0.0;
+    if (y) *y = v ? static_cast<double>(v->value.origin.y) : 0.0;
+    if (z) *z = v ? static_cast<double>(v->value.origin.z) : 0.0;
+}
+
+double cmg_voxels_spacing(const cmg_voxels* v) { return v ? v->value.spacing : 0.0; }
+
+const unsigned char* cmg_voxels_occupancy(const cmg_voxels* v) {
+    return (v && !v->value.occupancy.empty()) ? v->value.occupancy.data() : nullptr;
+}
+
+const float* cmg_voxels_distance(const cmg_voxels* v) {
+    return (v && !v->value.distance.empty()) ? v->value.distance.data() : nullptr;
 }
 
 cmg_status cmg_read_plc(const char* path, cmg_plc** out, char* errbuf, size_t len) {

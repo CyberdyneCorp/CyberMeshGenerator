@@ -19,6 +19,24 @@ public struct Mesh {
     public let faces: [[Int32]]        // 3 vertex indices each
 }
 
+/// Per-cell data produced by `voxelize`.
+public enum VoxelMode: Int32 {
+    case occupancy = 0        // 1 = inside / 0 = outside, in `VoxelGrid.occupancy`
+    case signedDistance = 1   // signed distance (negative inside), in `VoxelGrid.distance`
+}
+
+/// A dense axis-aligned regular grid returned by `voxelize`. Cells are cubic with
+/// side `spacing`; `origin` is the world center of cell (0,0,0). Values are row-major
+/// (index = (k*ny + j)*nx + i). Exactly one of `occupancy` / `distance` is populated,
+/// matching the requested `VoxelMode`.
+public struct VoxelGrid {
+    public let nx, ny, nz: Int32
+    public let origin: Point3
+    public let spacing: Double
+    public let occupancy: [UInt8]   // empty in signed-distance mode
+    public let distance: [Float]    // empty in occupancy mode
+}
+
 /// Typed meshing options (a subset mirroring the C++ MeshOptions).
 public struct MeshOptions {
     public var plc = false
@@ -133,6 +151,32 @@ public enum CyberMesh {
             throw MeshError(code: Int32(st.rawValue), message: String(cString: err))
         }
         return PLC(adopting: h)
+    }
+
+    /// Voxelize a closed PLC into a regular axis-aligned grid. `resolution` is the
+    /// number of cubic cells along the longest bounding-box axis; `pad` adds a margin
+    /// of cells on every side. In `.occupancy` mode the grid carries inside/outside
+    /// bytes; in `.signedDistance` mode it carries a signed-distance field (negative
+    /// inside). Classification uses exact predicates, so fidelity is bounded by the
+    /// input tessellation (a mesh engine, not a B-Rep/CAD kernel).
+    public static func voxelize(_ plc: PLC, resolution: Int32 = 64,
+                                mode: VoxelMode = .occupancy, pad: Int32 = 1) throws -> VoxelGrid {
+        var out: OpaquePointer? = nil; var err = [CChar](repeating: 0, count: 256)
+        let st = cmg_plc_voxelize(plc.handle, resolution, mode.rawValue, pad, &out, &err, 256)
+        guard st == CMG_OK, let v = out else {
+            throw MeshError(code: Int32(st.rawValue), message: String(cString: err))
+        }
+        defer { cmg_voxels_destroy(v) }
+        var nx: Int32 = 0, ny: Int32 = 0, nz: Int32 = 0
+        cmg_voxels_dims(v, &nx, &ny, &nz)
+        var ox = 0.0, oy = 0.0, oz = 0.0
+        cmg_voxels_origin(v, &ox, &oy, &oz)
+        let count = Int(nx) * Int(ny) * Int(nz)
+        var occupancy = [UInt8](), distance = [Float]()
+        if let o = cmg_voxels_occupancy(v) { occupancy = Array(UnsafeBufferPointer(start: o, count: count)) }
+        if let d = cmg_voxels_distance(v) { distance = Array(UnsafeBufferPointer(start: d, count: count)) }
+        return VoxelGrid(nx: nx, ny: ny, nz: nz, origin: Point3(ox, oy, oz),
+                         spacing: cmg_voxels_spacing(v), occupancy: occupancy, distance: distance)
     }
 
     /// Load a PLC surface from a file (.stl / .obj / .off / .ply / .poly / .smesh).
