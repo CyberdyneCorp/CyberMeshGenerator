@@ -109,6 +109,7 @@ add_library(cmg
     src/sizing/background.cpp
     src/region/classify.cpp
     src/voronoi/voronoi.cpp
+    src/recover/segments.cpp
     src/backend/dispatch.cpp
     src/predicates/robust.cpp
     src/predicates/predicates.cpp
