@@ -115,11 +115,17 @@ boundary and volume fixed. Alongside: `.vol`/`.mtr` constraint-file I/O, Voronoi
 `.v.*` file output, and the **power (weighted) diagram** (orthocenter-dual of the
 weighted Delaunay).
 
-Mesh reconstruction, coarsening, the CLI, and **facet recovery** (the hard second
-half of CDT) remain scheduled — see [`openspec/`](openspec/) for the roadmap and
+**CLI + reconstruction + coarsening — landed.** A `cmg` executable
+(`cmg -pq1.414a0.1 part.poly`) reads by extension, meshes, and writes TetGen-named
+`<base>.1.node`/`.ele`/`.face`. `cmg::reconstruct::reconstruct` re-meshes and
+refines an existing mesh; `cmg::coarsen::coarsen` removes interior vertices to
+decimate while keeping the boundary.
+
+The one hard piece left on the roadmap is **facet recovery** (the second half of
+CDT) — see [`openspec/`](openspec/) for the roadmap and
 [`openspec/project.md`](openspec/project.md) for context.
 
-Builds CPU-only with zero dependencies; the suite (107 tests + pure-C ABI smoke
+Builds CPU-only with zero dependencies; the suite (114 tests + pure-C ABI smoke
 test) is green across the default, `-Werror`, ASan, and single-precision mobile
 profiles.
 

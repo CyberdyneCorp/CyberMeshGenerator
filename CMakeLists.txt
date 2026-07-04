@@ -15,6 +15,7 @@ project(CyberMeshGenerator
 option(CMG_BUILD_TESTS   "Build the test suite"                   ON)
 option(CMG_BUILD_SHARED  "Build shared library"                   OFF)
 option(CMG_BUILD_C_ABI   "Build the stable C ABI shim"            OFF)
+option(CMG_BUILD_CLI     "Build the cmg command-line executable"  ON)
 option(CMG_ENABLE_ASAN   "Enable AddressSanitizer/UBSan"          OFF)
 option(CMG_WARNINGS_AS_ERRORS "Treat warnings as errors"          OFF)
 
@@ -113,6 +114,9 @@ add_library(cmg
     src/optimize/smooth.cpp
     src/io/constraints.cpp
     src/io/voronoi_io.cpp
+    src/cli/cli.cpp
+    src/reconstruct/reconstruct.cpp
+    src/coarsen/coarsen.cpp
     src/backend/dispatch.cpp
     src/predicates/robust.cpp
     src/predicates/predicates.cpp
@@ -182,6 +186,15 @@ endif()
 if(CMG_WITH_PYTHON OR CMG_WITH_SWIFT OR CMG_BUILD_C_ABI)
     enable_language(C)
     add_subdirectory(bindings/c)
+endif()
+
+# -----------------------------------------------------------------------------
+# Command-line executable
+# -----------------------------------------------------------------------------
+if(CMG_BUILD_CLI)
+    add_executable(cmg_cli cli/main.cpp)
+    set_target_properties(cmg_cli PROPERTIES OUTPUT_NAME cmg)
+    target_link_libraries(cmg_cli PRIVATE cmg::cmg)
 endif()
 
 # -----------------------------------------------------------------------------
