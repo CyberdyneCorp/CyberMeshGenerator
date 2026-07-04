@@ -105,6 +105,7 @@ add_library(cmg
     src/core/tetrahedralize.cpp
     src/delaunay/incremental.cpp
     src/constrained/tetrahedralize_plc.cpp
+    src/quality/refine.cpp
     src/backend/dispatch.cpp
     src/predicates/robust.cpp
     src/predicates/predicates.cpp
@@ -145,10 +146,18 @@ endif()
 # and would produce wrong signs on degenerate input. This is NOT a perf choice.
 # (oracle: TetGen makefile `PREDCXXFLAGS = -O0`)
 # -----------------------------------------------------------------------------
-# The verbatim Shewchuk port is exempt from -Wall/-Werror (it is transcribed
-# third-party code, not ours to restyle) via -w, and pinned to -O0.
+# The verbatim Shewchuk port is transcribed third-party code, not ours to restyle:
+# exempt it from -Wall/-Werror (-w), pin it to -O0 (correctness invariant), and
+# exclude it from the sanitizers. Shewchuk's fast_expansion_sum_zeroelim contains a
+# deliberate (and functionally harmless) one-past-the-end read `e[++eindex]` whose
+# value is never used; ASan/UBSan flag it as UB. We do not patch the proven code —
+# we skip instrumenting this TU. All of our own code stays fully sanitized.
+set(_cmg_pred_opts "-O0;-w")
+if(CMG_ENABLE_ASAN)
+    list(APPEND _cmg_pred_opts "-fno-sanitize=address,undefined")
+endif()
 set_source_files_properties(src/predicates/predicates.cpp PROPERTIES
-    COMPILE_OPTIONS "-O0;-w")
+    COMPILE_OPTIONS "${_cmg_pred_opts}")
 
 if(CMG_ENABLE_ASAN)
     target_compile_options(cmg PUBLIC -fsanitize=address,undefined -fno-omit-frame-pointer)

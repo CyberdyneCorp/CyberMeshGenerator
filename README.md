@@ -73,11 +73,18 @@ domains — a cube PLC meshes to volume 1.0, an L-shaped prism to 3.0 (carving a
 the hull's exterior). Full exact-facet-preserving CDT (boundary recovery, `-Y`,
 concave conformance) is the next increment.
 
-Quality refinement, sizing, optimization, Voronoi and the CLI remain scheduled as
-their own OpenSpec changes — see [`openspec/`](openspec/) for the roadmap and
+**Phase 4 (quality mesh generation, increment 1) — landed.** Setting
+`MeshOptions::max_volume` triggers Delaunay refinement — inserting Steiner points
+until every tetrahedron meets the volume bound (a cube capped at 0.05 refines from
+6 to ~76 tets, volume still 1.0), with a `steiner_budget` cap. Shape/radius-edge
+refinement is deferred (it diverges on slivers without exudation + encroachment
+handling — shipped honestly as a documented non-goal rather than broken).
+
+Sizing, optimization, Voronoi and the CLI remain scheduled as their own OpenSpec
+changes — see [`openspec/`](openspec/) for the roadmap and
 [`openspec/project.md`](openspec/project.md) for context.
 
-Builds CPU-only with zero dependencies; the suite (72 tests + pure-C ABI smoke
+Builds CPU-only with zero dependencies; the suite (78 tests + pure-C ABI smoke
 test) is green across the default, `-Werror`, ASan, and single-precision mobile
 profiles.
 
