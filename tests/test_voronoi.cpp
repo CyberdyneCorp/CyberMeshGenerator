@@ -2,6 +2,7 @@
 #include "cmg/cmg.hpp"
 #include "harness.hpp"
 
+#include <algorithm>
 #include <cmath>
 #include <map>
 #include <set>
