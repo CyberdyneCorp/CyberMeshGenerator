@@ -107,6 +107,16 @@ add_library(cmg
     src/backend/dispatch.cpp
     src/predicates/robust.cpp
     src/predicates/predicates.cpp
+    src/io/dispatch.cpp
+    src/io/node.cpp
+    src/io/ele.cpp
+    src/io/faceedge.cpp
+    src/io/poly.cpp
+    src/io/stl.cpp
+    src/io/off.cpp
+    src/io/ply.cpp
+    src/io/vtk.cpp
+    src/io/medit.cpp
 )
 add_library(cmg::cmg ALIAS cmg)
 
