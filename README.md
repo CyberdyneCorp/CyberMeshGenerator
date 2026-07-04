@@ -64,11 +64,20 @@ Delaunay output and confirms `delaunay()` produces the *identical* tetrahedraliz
 (same sorted-tuple set) on a general-position cloud — the kernel is now validated
 against TetGen itself, not only its invariants.
 
-Constrained meshing, quality refinement, sizing, optimization, Voronoi and the CLI
-remain scheduled as their own OpenSpec changes — see [`openspec/`](openspec/) for
-the roadmap and [`openspec/project.md`](openspec/project.md) for context.
+**Phase 3 (constrained tetrahedralization, increment 1) — landed.**
+`tetrahedralize(PLC)` now meshes the *interior* of a solid: the Delaunay
+tetrahedralization of the PLC vertices, carved (by ray-casting each tetrahedron
+against the boundary facets) to the tetrahedra inside the domain, with the domain
+boundary faces emitted. Exact and volume-conserving for convex / star-shaped
+domains — a cube PLC meshes to volume 1.0, an L-shaped prism to 3.0 (carving away
+the hull's exterior). Full exact-facet-preserving CDT (boundary recovery, `-Y`,
+concave conformance) is the next increment.
 
-Builds CPU-only with zero dependencies; the suite (66 tests + pure-C ABI smoke
+Quality refinement, sizing, optimization, Voronoi and the CLI remain scheduled as
+their own OpenSpec changes — see [`openspec/`](openspec/) for the roadmap and
+[`openspec/project.md`](openspec/project.md) for context.
+
+Builds CPU-only with zero dependencies; the suite (72 tests + pure-C ABI smoke
 test) is green across the default, `-Werror`, ASan, and single-precision mobile
 profiles.
 
