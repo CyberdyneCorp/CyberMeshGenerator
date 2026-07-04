@@ -30,6 +30,7 @@ typedef enum cmg_status {
 typedef struct cmg_plc cmg_plc;
 typedef struct cmg_mesh cmg_mesh;
 typedef struct cmg_options cmg_options;
+typedef struct cmg_voxels cmg_voxels;
 
 /* --- lifecycle ---------------------------------------------------------- */
 cmg_plc* cmg_plc_create(void);
@@ -125,6 +126,31 @@ const int* cmg_plc_triangles(cmg_plc*);
  * handle to free with cmg_plc_destroy; on failure fills errbuf and leaves *out NULL. */
 cmg_status cmg_plc_simplify(const cmg_plc*, int grid, cmg_plc** out,
                             char* errbuf, size_t errbuf_len);
+
+/* --- voxelization ------------------------------------------------------- */
+/* Voxelize a closed PLC into a regular axis-aligned grid. `resolution` is the number of
+ * cubic cells along the longest bounding-box axis (must be >= 1); `mode` selects the
+ * per-cell data (0 = occupancy bytes, 1 = signed-distance field, negative inside);
+ * `pad` is the margin in cells added on every side. On CMG_OK, *out receives a
+ * cmg_voxels handle the caller must free with cmg_voxels_destroy; on failure fills
+ * errbuf and leaves *out NULL. A resolution < 1 returns CMG_ERR_INVALID_INPUT. */
+cmg_status cmg_plc_voxelize(const cmg_plc*, int resolution, int mode, int pad,
+                            cmg_voxels** out, char* errbuf, size_t errbuf_len);
+
+/* Release a voxel grid handle. */
+void cmg_voxels_destroy(cmg_voxels*);
+/* Grid dimensions (cell counts) along each axis. */
+void cmg_voxels_dims(const cmg_voxels*, int* nx, int* ny, int* nz);
+/* World coordinate of the CENTER of cell (0,0,0). */
+void cmg_voxels_origin(const cmg_voxels*, double* x, double* y, double* z);
+/* Cubic cell size in world units. */
+double cmg_voxels_spacing(const cmg_voxels*);
+/* Zero-copy views into the grid handle's storage (row-major, idx = (k*ny + j)*nx + i,
+ * length nx*ny*nz). Occupancy returns 1=inside / 0=outside, or NULL in sdf mode;
+ * distance returns signed distances (negative inside), or NULL in occupancy mode.
+ * Pointers are valid until the grid is destroyed. */
+const unsigned char* cmg_voxels_occupancy(const cmg_voxels*);
+const float* cmg_voxels_distance(const cmg_voxels*);
 
 /* Library version string, e.g. "0.1.0". */
 const char* cmg_version(void);

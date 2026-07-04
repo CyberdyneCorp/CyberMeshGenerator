@@ -140,6 +140,22 @@ def _bind(lib: ctypes.CDLL) -> None:
         ctypes.c_void_p, ctypes.c_int, _c_void_pp, ctypes.c_char_p,
         ctypes.c_size_t]
 
+    lib.cmg_plc_voxelize.restype = ctypes.c_int
+    lib.cmg_plc_voxelize.argtypes = [
+        ctypes.c_void_p, ctypes.c_int, ctypes.c_int, ctypes.c_int,
+        _c_void_pp, ctypes.c_char_p, ctypes.c_size_t]
+    lib.cmg_voxels_destroy.argtypes = [ctypes.c_void_p]
+    lib.cmg_voxels_dims.argtypes = [
+        ctypes.c_void_p, _c_int_p, _c_int_p, _c_int_p]
+    lib.cmg_voxels_origin.argtypes = [
+        ctypes.c_void_p, _c_double_p, _c_double_p, _c_double_p]
+    lib.cmg_voxels_spacing.restype = ctypes.c_double
+    lib.cmg_voxels_spacing.argtypes = [ctypes.c_void_p]
+    lib.cmg_voxels_occupancy.restype = ctypes.POINTER(ctypes.c_ubyte)
+    lib.cmg_voxels_occupancy.argtypes = [ctypes.c_void_p]
+    lib.cmg_voxels_distance.restype = ctypes.POINTER(ctypes.c_float)
+    lib.cmg_voxels_distance.argtypes = [ctypes.c_void_p]
+
     lib.cmg_version.restype = ctypes.c_char_p
 
 
@@ -397,6 +413,83 @@ def simplify(plc: PLC, grid: int = 34) -> PLC:
     return PLC._from_handle(out.value)
 
 
+@dataclass
+class VoxelGrid:
+    """A regular voxel grid returned by :func:`voxelize`.
+
+    ``grid`` is a dense ``(nx, ny, nz)`` NumPy array: ``uint8`` occupancy (1 inside)
+    for ``mode="occupancy"``, or ``float32`` signed distance (negative inside) for
+    ``mode="sdf"``. ``origin`` is the grid corner and ``spacing`` the cubic cell size.
+    """
+
+    grid: np.ndarray            # (nx, ny, nz) uint8 (occupancy) or float32 (sdf)
+    origin: np.ndarray          # (3,) float64
+    spacing: float
+    mode: str                   # "occupancy" or "sdf"
+
+    @property
+    def dims(self) -> tuple:
+        """The grid dimensions ``(nx, ny, nz)``."""
+        return tuple(int(d) for d in self.grid.shape)
+
+
+_VOXEL_MODES = {"occupancy": 0, "sdf": 1}
+
+
+def voxelize(plc: PLC, resolution: int = 64, mode: str = "occupancy",
+             pad: int = 1) -> VoxelGrid:
+    """Voxelize a PLC into a regular grid and return a :class:`VoxelGrid`.
+
+    `resolution` is the number of cubic cells along the longest bounding-box axis,
+    `pad` the margin cells added around the box. `mode` selects the cell data:
+    ``"occupancy"`` (or ``0``) yields a ``uint8`` inside/outside grid, ``"sdf"`` (or
+    ``1``) a ``float32`` signed-distance field (negative inside). The grid is a dense
+    ``(nx, ny, nz)`` NumPy array owning its memory.
+    """
+    if not isinstance(plc, PLC):
+        raise TypeError("plc must be a cybermesh.PLC")
+    if isinstance(mode, str):
+        try:
+            mode_code = _VOXEL_MODES[mode]
+        except KeyError:
+            raise ValueError(f"mode must be one of {sorted(_VOXEL_MODES)} or 0/1")
+        mode_name = mode
+    else:
+        mode_code = int(mode)
+        if mode_code not in (0, 1):
+            raise ValueError("mode must be 'occupancy'/0 or 'sdf'/1")
+        mode_name = "occupancy" if mode_code == 0 else "sdf"
+
+    out = ctypes.c_void_p()
+    err = ctypes.create_string_buffer(256)
+    st = _lib.cmg_plc_voxelize(
+        plc._handle, int(resolution), mode_code, int(pad),
+        ctypes.byref(out), err, 256)
+    _check(st, err)
+    handle = out.value
+    try:
+        nx, ny, nz = ctypes.c_int(), ctypes.c_int(), ctypes.c_int()
+        _lib.cmg_voxels_dims(handle, ctypes.byref(nx), ctypes.byref(ny),
+                             ctypes.byref(nz))
+        ox, oy, oz = ctypes.c_double(), ctypes.c_double(), ctypes.c_double()
+        _lib.cmg_voxels_origin(handle, ctypes.byref(ox), ctypes.byref(oy),
+                               ctypes.byref(oz))
+        spacing = float(_lib.cmg_voxels_spacing(handle))
+        n = nx.value * ny.value * nz.value
+
+        if mode_code == 0:
+            grid = np.ctypeslib.as_array(
+                _lib.cmg_voxels_occupancy(handle), (n,)).astype(np.uint8)
+        else:
+            grid = np.ctypeslib.as_array(
+                _lib.cmg_voxels_distance(handle), (n,)).astype(np.float32)
+        grid = grid.reshape((nx.value, ny.value, nz.value)).copy()
+        origin = np.array([ox.value, oy.value, oz.value], dtype=np.float64)
+    finally:
+        _lib.cmg_voxels_destroy(handle)
+    return VoxelGrid(grid=grid, origin=origin, spacing=spacing, mode=mode_name)
+
+
 def read_points(path: str) -> PLC:
     """Read a point set (``.node``) into a points-only PLC."""
     return _read_plc_handle(_lib.cmg_read_points, path)
@@ -443,6 +536,6 @@ def version() -> str:
     return _lib.cmg_version().decode()
 
 
-__all__ = ["PLC", "MeshOptions", "Mesh", "tetrahedralize", "delaunay",
+__all__ = ["PLC", "MeshOptions", "Mesh", "VoxelGrid", "tetrahedralize", "delaunay",
            "read_plc", "read_points", "read_mesh", "write_mesh", "write_plc",
-           "simplify", "version"]
+           "simplify", "voxelize", "version"]

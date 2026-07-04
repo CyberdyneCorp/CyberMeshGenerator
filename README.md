@@ -108,6 +108,17 @@ flowchart LR
 present and CUDA is validated on real hardware. The Swift binding is source-only in this
 release.</sub>
 
+### Voxelization
+
+`cybermesh.voxelize(plc, resolution=128)` turns a PLC into a regular grid — an
+occupancy grid, or a signed-distance field (`mode="sdf"`) with the origin and cubic
+spacing — for structured-grid FDTD/FEM, level sets, or a background sizing field. This
+is **fast, exact-predicate, mesh-native** voxelization: classification runs on the
+boundary triangles via Shewchuk's `orient3d`, so it is robust and has no CAD-kernel
+dependency, but its fidelity is bounded by the input tessellation. CyberMeshGenerator is
+a mesh engine, not a B-Rep/CAD kernel — for exact curved-surface (STEP/IGES) fidelity,
+voxelize with OCCT, which classifies against the true analytic surface.
+
 ## Python
 
 The `cybermesh` binding (ctypes/NumPy over the stable C ABI) takes a model from file
