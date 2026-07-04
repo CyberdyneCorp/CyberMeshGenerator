@@ -3,6 +3,7 @@
 [![C++20](https://img.shields.io/badge/C%2B%2B-20-00599C?logo=cplusplus&logoColor=white)](https://en.cppreference.com/w/cpp/20)
 [![CMake](https://img.shields.io/badge/CMake-3.25%2B-064F8C?logo=cmake&logoColor=white)](https://cmake.org/)
 [![Spec](https://img.shields.io/badge/spec-OpenSpec-3B5526)](openspec/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 A clean-room **Modern C++20 port of [TetGen](https://codeberg.org/TetGen/TetGen)** —
 a Delaunay-based quality tetrahedral mesh generator and 3D Delaunay/Voronoi engine
@@ -209,10 +210,12 @@ cmake --build build -j
 
 ## Licensing
 
-TetGen 1.6.0 is **AGPLv3** with a WIAS commercial dual-license. The license of this
-port and its provenance discipline (clean-room reimplementation vs. licensed
-derivative) is an **open decision for the maintainer** — see
-[`NOTICE.md`](NOTICE.md). Do not distribute before it is settled.
+Released under the **[MIT License](LICENSE)**. CyberMeshGenerator is a **clean-room
+reimplementation** of TetGen's algorithms from the published paper and a behavioral
+OpenSpec baseline — TetGen's own AGPLv3 source is never transcribed into `src/`; TetGen
+is used only as a test oracle. Shewchuk's robust predicates are public-domain and
+retain that origin. See [`NOTICE.md`](NOTICE.md) for the full provenance and
+attribution.
 
 ## Reference
 
