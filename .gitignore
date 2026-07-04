@@ -25,3 +25,6 @@ dist/
 .DS_Store
 .idea/
 .vscode/
+
+# example generated cache
+examples/**/_tetmesh_cache.npz
