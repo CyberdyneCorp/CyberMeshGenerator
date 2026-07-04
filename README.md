@@ -145,6 +145,36 @@ Builds CPU-only with zero dependencies; the suite (**121 CPU / 122 with CUDA** t
 + pure-C ABI smoke + Python binding test) is green across the default, `-Werror`,
 ASan, and single-precision mobile profiles, and on the CUDA GPU path.
 
+## Examples
+
+Worked examples in [`examples/`](examples/) run the **Python** binding on real 3-D
+data. Each parses a mesh, feeds it to CyberMeshGenerator, and renders the result.
+
+### Stanford Bunny — watertight STL → **solid** interior mesh
+
+`tetrahedralize(plc)` carves the closed bunny into a solid tetrahedral mesh whose
+boundary conforms to the shape (not the convex hull). Self-validated: the tet-mesh
+volume equals the surface-enclosed volume to **0.2 %**.
+([`examples/bunny`](examples/bunny))
+
+![Stanford Bunny](examples/bunny/bunny_comparison.png)
+
+### Eiffel Tower — CyberMeshGenerator **vs real TetGen**
+
+Delaunay tetrahedralization of the same points, computed by both tools:
+**100.00 % identical tetrahedra** (12,326 each), volume equal to 1.5×10⁻¹¹ — bit-for-bit
+agreement with the reference implementation on real scan data.
+([`examples/eiffel`](examples/eiffel))
+
+![Eiffel Tower vs TetGen](examples/eiffel/eiffel_comparison.png)
+
+### Antenna — open surface → Delaunay of the vertices
+
+A textured OBJ truss (no closed interior) meshed with `delaunay` — 8,832 vertices →
+62,405 tetrahedra. ([`examples/antenna`](examples/antenna))
+
+![Antenna](examples/antenna/antenna_comparison.png)
+
 ## Build
 
 ```bash
