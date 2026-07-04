@@ -1,0 +1,41 @@
+// CyberMeshGenerator — compile-time backend/integration configuration.
+// Generated from config.hpp.in by CMake. Do not edit the generated copy.
+//
+// A build with every CMG_WITH_* flag OFF is the portable mobile (iOS/Android)
+// baseline and MUST be fully functional using only the C++ standard library.
+#pragma once
+
+// -- Optional GPU acceleration backends (routed through NumPP's device layer) --
+#cmakedefine01 CMG_WITH_CUDA
+#cmakedefine01 CMG_WITH_OPENCL
+#cmakedefine01 CMG_WITH_METAL
+
+// -- Optional integrations with the CyberdyneCorp scientific stack ------------
+#cmakedefine01 CMG_WITH_NUMPP
+#cmakedefine01 CMG_WITH_SCIPP
+
+// -- Optional language bindings ----------------------------------------------
+#cmakedefine01 CMG_WITH_PYTHON
+#cmakedefine01 CMG_WITH_SWIFT
+
+// -- Optional multithreaded CPU acceleration ---------------------------------
+#cmakedefine01 CMG_WITH_THREADS
+
+// -- Numerical precision of the REAL type ------------------------------------
+// When defined, REAL is `float` instead of `double` (mirrors TetGen's -DSINGLE),
+// trading precision for memory on constrained mobile targets.
+#cmakedefine CMG_SINGLE
+
+namespace cmg::config {
+
+/// True when at least one GPU backend is compiled in.
+inline constexpr bool has_gpu_backend =
+    (CMG_WITH_CUDA != 0) || (CMG_WITH_OPENCL != 0) || (CMG_WITH_METAL != 0);
+
+/// True when the NumPP device-dispatch substrate is available.
+inline constexpr bool has_numpp = (CMG_WITH_NUMPP != 0);
+
+/// True when the SciPP spatial primitives are available.
+inline constexpr bool has_scipp = (CMG_WITH_SCIPP != 0);
+
+} // namespace cmg::config

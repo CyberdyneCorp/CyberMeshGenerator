@@ -1,0 +1,29 @@
+{
+  "name": "cybermeshgenerator",
+  "version": "0.1.0",
+  "description": "Modern C++20 port of TetGen with CPU/CUDA/OpenCL/Metal acceleration and Python/Swift bindings",
+  "homepage": "https://github.com/CyberdyneCorp/CyberMeshGenerator",
+  "dependencies": [],
+  "features": {
+    "numpp": {
+      "description": "Integrate NumPP for array interop and GPU device dispatch",
+      "dependencies": ["numpp"]
+    },
+    "scipp": {
+      "description": "Integrate SciPP spatial primitives (KD-tree, distances)",
+      "dependencies": ["scipp"]
+    },
+    "cuda": {
+      "description": "CUDA GPU backend (routed through NumPP)",
+      "dependencies": [{ "name": "cybermeshgenerator", "features": ["numpp"] }]
+    },
+    "opencl": {
+      "description": "OpenCL GPU backend (routed through NumPP)",
+      "dependencies": [{ "name": "cybermeshgenerator", "features": ["numpp"] }]
+    },
+    "metal": {
+      "description": "Metal GPU backend for Apple platforms (routed through NumPP)",
+      "dependencies": [{ "name": "cybermeshgenerator", "features": ["numpp"] }]
+    }
+  }
+}

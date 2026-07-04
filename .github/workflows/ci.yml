@@ -1,0 +1,47 @@
+name: CI
+
+on: [push, pull_request]
+
+jobs:
+  openspec:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 20 }
+      - run: npm install -g @fission-ai/openspec@latest
+      - run: openspec validate --all --strict
+
+  build-cpu:
+    # The portable CPU-only baseline: zero extra deps, warnings-as-errors, tests.
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        compiler: [g++, clang++]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure
+        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+             -DCMAKE_CXX_COMPILER=${{ matrix.compiler }}
+             -DCMG_WARNINGS_AS_ERRORS=ON -DCMG_BUILD_C_ABI=ON
+      - name: Build
+        run: cmake --build build -j
+      - name: Test
+        run: ctest --test-dir build --output-on-failure
+
+  build-asan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: cmake -S . -B build-asan -DCMAKE_BUILD_TYPE=Debug -DCMG_ENABLE_ASAN=ON -DCMG_BUILD_C_ABI=ON
+      - run: cmake --build build-asan -j
+      - run: ctest --test-dir build-asan --output-on-failure
+
+  build-mobile:
+    # Single-precision baseline stands in for the iOS/Android CPU-only contract.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: cmake -S . -B build-mobile -DCMAKE_BUILD_TYPE=Release -DCMG_SINGLE=ON
+      - run: cmake --build build-mobile -j
+      - run: ctest --test-dir build-mobile --output-on-failure

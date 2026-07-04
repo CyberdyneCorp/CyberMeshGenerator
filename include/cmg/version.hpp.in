@@ -1,0 +1,19 @@
+// CyberMeshGenerator — version information (generated from version.hpp.in)
+#pragma once
+
+#define CMG_VERSION_MAJOR @PROJECT_VERSION_MAJOR@
+#define CMG_VERSION_MINOR @PROJECT_VERSION_MINOR@
+#define CMG_VERSION_PATCH @PROJECT_VERSION_PATCH@
+#define CMG_VERSION_STRING "@PROJECT_VERSION@"
+
+namespace cmg {
+
+/// Semantic version of the CyberMeshGenerator library.
+inline constexpr int version_major = CMG_VERSION_MAJOR;
+inline constexpr int version_minor = CMG_VERSION_MINOR;
+inline constexpr int version_patch = CMG_VERSION_PATCH;
+
+/// Human-readable version string, e.g. "0.1.0".
+inline constexpr const char* version_string = CMG_VERSION_STRING;
+
+} // namespace cmg

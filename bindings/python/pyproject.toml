@@ -1,0 +1,24 @@
+[build-system]
+requires = ["scikit-build-core>=0.8", "nanobind>=2.0"]
+build-backend = "scikit_build_core.build"
+
+[project]
+name = "cybermesh"
+version = "0.1.0"
+description = "Modern C++20 TetGen port — tetrahedral mesh generation with NumPy interop"
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "SEE-LICENSE-IN-LICENSE" }
+authors = [{ name = "CyberdyneCorp" }]
+dependencies = ["numpy>=1.23"]
+
+[project.urls]
+Homepage = "https://github.com/CyberdyneCorp/CyberMeshGenerator"
+
+[tool.scikit-build]
+# The extension is a thin nanobind layer over the C ABI shim (bindings/c). Point
+# arrays cross the boundary as NumPy-interoperable buffers so
+# `numpy.asarray(mesh.points)` is zero-copy; when CMG_WITH_NUMPP is on, NumPP's
+# .npy/DLPack interop is used instead of the raw buffer protocol.
+cmake.args = ["-DCMG_WITH_PYTHON=ON", "-DCMG_BUILD_TESTS=OFF"]
+wheel.packages = ["src/cybermesh"]

@@ -1,0 +1,6 @@
+module CCyberMesh {
+    // Re-exports the CyberMeshGenerator C ABI to Swift. In a shipped package this
+    // points at the prebuilt libcmg_c headers (bundled via an XCFramework).
+    header "shim.h"
+    export *
+}
