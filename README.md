@@ -80,11 +80,19 @@ until every tetrahedron meets the volume bound (a cube capped at 0.05 refines fr
 refinement is deferred (it diverges on slivers without exudation + encroachment
 handling — shipped honestly as a documented non-goal rather than broken).
 
-Sizing, optimization, Voronoi and the CLI remain scheduled as their own OpenSpec
-changes — see [`openspec/`](openspec/) for the roadmap and
+**Phase 5 (adaptive mesh sizing, increment 1) — landed.** `MeshOptions::sizing`
+takes a target-edge-length field — an analytic closure or one built from a
+background mesh (`cmg::sizing::from_background`, barycentric-interpolated, with
+metric scaling) — and refinement grades element size to it (a box with a fine
+half and coarse half meshes ~7× finer in the fine region). It reuses Phase 4's
+self-limiting volume engine via a spatially-varying volume target, so it inherits
+the same robustness.
+
+Optimization, Voronoi and the CLI remain scheduled as their own OpenSpec changes —
+see [`openspec/`](openspec/) for the roadmap and
 [`openspec/project.md`](openspec/project.md) for context.
 
-Builds CPU-only with zero dependencies; the suite (78 tests + pure-C ABI smoke
+Builds CPU-only with zero dependencies; the suite (85 tests + pure-C ABI smoke
 test) is green across the default, `-Werror`, ASan, and single-precision mobile
 profiles.
 

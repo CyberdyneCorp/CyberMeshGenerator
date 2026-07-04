@@ -5,6 +5,7 @@
 // struct. A TetGen-compatible switch parser is offered as a compatibility layer.
 #pragma once
 
+#include <functional>
 #include <optional>
 #include <string_view>
 #include <vector>
@@ -60,6 +61,11 @@ struct MeshOptions {
     // `weighted` is set; size must equal the point count. Each weight w lifts its
     // point to height x²+y²+z²−w.
     std::vector<Real> weights;
+
+    // Adaptive mesh sizing (-m): target edge length at a point. Empty = unused; a
+    // returned value <= 0 leaves that region unconstrained. Build one from a
+    // background mesh with cmg::sizing::from_background, or supply any closure.
+    std::function<double(const Point3&)> sizing;
 
     /// Parse a TetGen-style switch string (without the leading dash) into typed
     /// options. Returns a ParseError on an unknown or incompatible combination
