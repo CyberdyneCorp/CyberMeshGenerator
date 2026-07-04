@@ -9,6 +9,8 @@
 
 #include "cmg/api.hpp"
 #include "cmg/backend/config.hpp"
+#include "cmg/coarsen/coarsen.hpp"
+#include "cmg/reconstruct/reconstruct.hpp"
 #include "cmg/backend/dispatch.hpp"
 #include "cmg/core/error.hpp"
 #include "cmg/core/expected.hpp"
