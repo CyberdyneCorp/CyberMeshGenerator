@@ -123,6 +123,18 @@ public enum CyberMesh {
         return mesh(from: m)
     }
 
+    /// Simplify a PLC surface by grid vertex clustering (`grid` cells along the
+    /// longest axis; higher keeps more triangles). Returns a new PLC — handy to
+    /// decimate a dense loaded surface before meshing.
+    public static func simplify(_ plc: PLC, grid: Int32 = 34) throws -> PLC {
+        var out: OpaquePointer? = nil; var err = [CChar](repeating: 0, count: 256)
+        let st = cmg_plc_simplify(plc.handle, grid, &out, &err, 256)
+        guard st == CMG_OK, let h = out else {
+            throw MeshError(code: Int32(st.rawValue), message: String(cString: err))
+        }
+        return PLC(adopting: h)
+    }
+
     /// Load a PLC surface from a file (.stl / .obj / .off / .ply / .poly / .smesh).
     public static func readPLC(_ path: String) throws -> PLC {
         var out: OpaquePointer? = nil; var err = [CChar](repeating: 0, count: 256)

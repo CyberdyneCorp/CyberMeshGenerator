@@ -120,6 +120,12 @@ const double* cmg_plc_points(cmg_plc*);
 size_t cmg_plc_num_triangles(cmg_plc*);
 const int* cmg_plc_triangles(cmg_plc*);
 
+/* Simplify a triangulated PLC surface by grid vertex clustering: `grid` cells along
+ * the longest bounding-box axis (higher = finer). On CMG_OK, *out receives a new PLC
+ * handle to free with cmg_plc_destroy; on failure fills errbuf and leaves *out NULL. */
+cmg_status cmg_plc_simplify(const cmg_plc*, int grid, cmg_plc** out,
+                            char* errbuf, size_t errbuf_len);
+
 /* Library version string, e.g. "0.1.0". */
 const char* cmg_version(void);
 

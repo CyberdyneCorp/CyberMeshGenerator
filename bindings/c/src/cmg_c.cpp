@@ -218,6 +218,26 @@ const int* cmg_mesh_face_markers(const cmg_mesh* m) {
 
 /* --- file loading / saving ---------------------------------------------- */
 
+cmg_status cmg_plc_simplify(const cmg_plc* in, int grid, cmg_plc** out,
+                            char* errbuf, size_t len) {
+    if (out) *out = nullptr;
+    if (!in || !out) return CMG_ERR_INVALID_INPUT;
+    try {
+        cmg::simplify::SimplifyOptions o;
+        o.grid = grid;
+        auto r = cmg::simplify::simplify(in->value, o);
+        if (!r) {
+            set_err(errbuf, len, r.error().message);
+            return to_status(r.error().code);
+        }
+        *out = new cmg_plc{std::move(*r)};
+        return CMG_OK;
+    } catch (const std::exception& e) {
+        set_err(errbuf, len, e.what());
+        return CMG_ERR_INTERNAL;
+    }
+}
+
 cmg_status cmg_read_plc(const char* path, cmg_plc** out, char* errbuf, size_t len) {
     if (out) *out = nullptr;
     if (!path || !out) return CMG_ERR_INVALID_INPUT;

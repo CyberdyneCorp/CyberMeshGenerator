@@ -161,10 +161,11 @@ volume equals the surface-enclosed volume to **0.2 %**.
 
 ### Eiffel Tower — CyberMeshGenerator **vs real TetGen**
 
-Delaunay tetrahedralization of the same points, computed by both tools:
-**100.00 % identical tetrahedra** (12,326 each), volume equal to 1.5×10⁻¹¹ — bit-for-bit
-agreement with the reference implementation on real scan data.
-([`examples/eiffel`](examples/eiffel))
+Delaunay tetrahedralization of the same points, computed by both tools: total volume
+agreeing to **~0.01 %** and **~99 % identical tetrahedra** on real scan data. Both
+results are valid Delaunay triangulations; the sub-percent remainder is tie-breaking on
+cospherical (grid-clustered) points, where any two independent implementations may
+choose differently. ([`examples/eiffel`](examples/eiffel))
 
 ![Eiffel Tower vs TetGen](examples/eiffel/eiffel_comparison.png)
 

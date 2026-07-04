@@ -135,6 +135,10 @@ def _bind(lib: ctypes.CDLL) -> None:
     lib.cmg_plc_num_triangles.argtypes = [ctypes.c_void_p]
     lib.cmg_plc_triangles.restype = _c_int_p
     lib.cmg_plc_triangles.argtypes = [ctypes.c_void_p]
+    lib.cmg_plc_simplify.restype = ctypes.c_int
+    lib.cmg_plc_simplify.argtypes = [
+        ctypes.c_void_p, ctypes.c_int, _c_void_pp, ctypes.c_char_p,
+        ctypes.c_size_t]
 
     lib.cmg_version.restype = ctypes.c_char_p
 
@@ -377,6 +381,22 @@ def read_plc(path: str) -> PLC:
     return _read_plc_handle(_lib.cmg_read_plc, path)
 
 
+def simplify(plc: PLC, grid: int = 34) -> PLC:
+    """Simplify a PLC surface by grid vertex clustering and return a new PLC.
+
+    `grid` is the number of cells along the longest bounding-box axis: higher keeps
+    more triangles, lower is coarser. Useful to decimate a dense loaded surface before
+    meshing (e.g. ``tetrahedralize(simplify(read_plc("bunny.stl"), 34), ...)``).
+    """
+    if not isinstance(plc, PLC):
+        raise TypeError("plc must be a cybermesh.PLC")
+    out = ctypes.c_void_p()
+    err = ctypes.create_string_buffer(256)
+    st = _lib.cmg_plc_simplify(plc._handle, int(grid), ctypes.byref(out), err, 256)
+    _check(st, err)
+    return PLC._from_handle(out.value)
+
+
 def read_points(path: str) -> PLC:
     """Read a point set (``.node``) into a points-only PLC."""
     return _read_plc_handle(_lib.cmg_read_points, path)
@@ -425,4 +445,4 @@ def version() -> str:
 
 __all__ = ["PLC", "MeshOptions", "Mesh", "tetrahedralize", "delaunay",
            "read_plc", "read_points", "read_mesh", "write_mesh", "write_plc",
-           "version"]
+           "simplify", "version"]

@@ -37,40 +37,15 @@ STL = HERE / "Stanford_Bunny_sample.stl"
 GRID = 34  # vertex-clustering resolution for meshing (higher = finer, slower)
 
 
-def read_stl_corners(path: Path):
-    """Load the STL natively and return its (T, 3, 3) triangle-corner array.
-
-    ``cm.read_plc`` parses the STL (no hand-written binary unpacking); the loaded
-    PLC's geometry is read back through the accessors — ``plc.points`` (V, 3) and
-    ``plc.triangles`` (T, 3) — and indexed to per-corner coordinates."""
-    plc = cm.read_plc(str(path))
-    return plc.points[plc.triangles]  # (T, 3, 3)
-
-
-def cluster_decimate(corners, grid=GRID):
-    """Rossignac-Borrel vertex clustering: bin corners into a grid, average each
-    cell to a representative vertex, and re-emit non-degenerate unique triangles.
-    Keeps the surface closed while cutting the triangle count ~20x."""
-    V = corners.reshape(-1, 3)
-    lo, ext = V.min(0), (V.max(0) - V.min(0)).max()
-    cell = np.floor((V - lo) / ext * grid).astype(int)
-    key = cell[:, 0] * grid * grid + cell[:, 1] * grid + cell[:, 2]
-    uk, inv = np.unique(key, return_inverse=True)
-    reps = np.zeros((len(uk), 3))
-    cnt = np.zeros(len(uk))
-    np.add.at(reps, inv, V)
-    np.add.at(cnt, inv, 1)
-    reps /= cnt[:, None]
-    vi = inv.reshape(len(corners), 3)
-    faces, seen = [], set()
-    for a, b, c in vi:
-        if a == b or b == c or a == c:
-            continue
-        k = tuple(sorted((int(a), int(b), int(c))))
-        if k not in seen:
-            seen.add(k)
-            faces.append((int(a), int(b), int(c)))
-    return reps, faces
+def load_and_simplify(path: Path, grid=GRID):
+    """Load the STL natively and simplify it in the library — no hand-written parsing
+    or clustering. `cm.read_plc` parses the STL (welding coincident vertices) and
+    `cm.simplify` does the Rossignac-Borrel vertex clustering that used to live here.
+    Returns (full_triangle_count, simplified_plc). The full surface is also meshable
+    directly now that the carve is spatially indexed; simplifying just keeps the
+    render light and fast."""
+    full = cm.read_plc(str(path))
+    return full.triangles.shape[0], cm.simplify(full, grid=grid)
 
 
 def set_equal(ax, V):
@@ -155,11 +130,11 @@ def render_tetmesh(ax, mesh):
 
 
 def main():
-    print("Loading", STL.name, "natively (cm.read_plc) ...")
-    corners = read_stl_corners(STL)
-    print(f"  {len(corners)} triangles (full)")
-    P, F = cluster_decimate(corners)
-    print(f"  decimated (grid {GRID}): {len(P)} verts, {len(F)} triangles")
+    print("Loading + simplifying", STL.name, "natively (cm.read_plc / cm.simplify) ...")
+    full_tris, sic = load_and_simplify(STL)
+    P, F = sic.points, sic.triangles
+    print(f"  {full_tris} triangles (full) -> simplified (grid {GRID}): "
+          f"{len(P)} verts, {len(F)} triangles")
 
     cache = HERE / "_bunny_cache.npz"
     if cache.exists() and os.environ.get("CMG_NO_CACHE") is None:
@@ -171,11 +146,8 @@ def main():
         print(f"  loaded cached tet mesh: {mesh.tetrahedra.shape[0]} tetrahedra")
     else:
         print("Tetrahedralizing the SOLID interior (PLC carve)...")
-        plc = cm.PLC(); plc.add_points(P)
-        for f in F:
-            plc.add_facet(list(f), marker=1)
         t0 = time.time()
-        mesh = cm.tetrahedralize(plc, cm.MeshOptions(plc=True))
+        mesh = cm.tetrahedralize(sic, cm.MeshOptions(plc=True))
         print(f"  {mesh.tetrahedra.shape[0]} tetrahedra in {time.time() - t0:.1f}s")
         np.savez_compressed(cache, points=mesh.points, tets=mesh.tetrahedra)
 

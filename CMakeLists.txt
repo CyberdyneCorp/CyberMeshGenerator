@@ -116,6 +116,7 @@ add_library(cmg
     src/cli/cli.cpp
     src/reconstruct/reconstruct.cpp
     src/coarsen/coarsen.cpp
+    src/simplify/simplify.cpp
     src/quality/metrics.cpp
     src/detect/self_intersection.cpp
     src/backend/dispatch.cpp
