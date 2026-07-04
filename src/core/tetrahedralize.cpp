@@ -8,6 +8,7 @@
 // return MeshErrorCode::NotImplemented rather than a wrong or partial mesh.
 #include "cmg/api.hpp"
 
+#include "cmg/constrained/tetrahedralize_plc.hpp"
 #include "cmg/delaunay/incremental.hpp"
 #include "cmg/predicates/robust.hpp"
 
@@ -78,11 +79,8 @@ expected<Mesh, MeshError> tetrahedralize(const PLC& in, const MeshOptions& opts)
         return delaunay(in.points, opts);
     }
 
-    // Boundary recovery / constrained Delaunay of a faceted PLC is Phase 3.
-    return unexpected(MeshError{
-        MeshErrorCode::NotImplemented,
-        "constrained tetrahedralization of a faceted PLC lands in Phase 3 "
-        "(constrained-tetrahedralization)"});
+    // Faceted PLC: boundary-conforming tetrahedralization of the domain interior.
+    return cdt::tetrahedralize_plc(in, opts);
 }
 
 } // namespace cmg
