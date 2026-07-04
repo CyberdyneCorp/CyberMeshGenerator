@@ -19,3 +19,4 @@
 #include "cmg/predicates/robust.hpp"
 #include "cmg/sizing/background.hpp"
 #include "cmg/version.hpp"
+#include "cmg/voronoi/voronoi.hpp"
