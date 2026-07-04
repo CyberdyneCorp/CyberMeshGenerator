@@ -101,11 +101,18 @@ between adjacent tets, outward rays for hull faces), and per-site cells — comp
 the "Delaunay **and Voronoi** engine" identity. Validated by duality: circumcenter
 equidistance holds to ~1e-16, one vertex per tet, one edge per face.
 
-Mesh optimization, reconstruction, the CLI, and the deferred CDT boundary-recovery
-core remain scheduled as their own OpenSpec changes — see [`openspec/`](openspec/)
-for the roadmap and [`openspec/project.md`](openspec/project.md) for context.
+**CDT boundary recovery — step 1 (segment recovery) — landed.** Under
+`MeshOptions::preserve_edges`, a PLC's facet edges (feature/crease edges) are
+recovered by bisection so each appears as a chain of mesh edges — even when the
+edge is provably not a Delaunay edge of the input vertices. This is the tractable
+half of constrained-Delaunay boundary recovery; **facet (triangle) recovery** is
+the next step.
 
-Builds CPU-only with zero dependencies; the suite (95 tests + pure-C ABI smoke
+Mesh optimization, reconstruction, and the CLI remain scheduled as their own
+OpenSpec changes — see [`openspec/`](openspec/) for the roadmap and
+[`openspec/project.md`](openspec/project.md) for context.
+
+Builds CPU-only with zero dependencies; the suite (100 tests + pure-C ABI smoke
 test) is green across the default, `-Werror`, ASan, and single-precision mobile
 profiles.
 

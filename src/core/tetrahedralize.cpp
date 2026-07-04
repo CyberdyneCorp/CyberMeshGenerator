@@ -12,6 +12,7 @@
 #include "cmg/delaunay/incremental.hpp"
 #include "cmg/predicates/robust.hpp"
 #include "cmg/quality/refine.hpp"
+#include "cmg/recover/segments.hpp"
 
 namespace cmg {
 
@@ -88,11 +89,27 @@ expected<Mesh, MeshError> tetrahedralize(const PLC& in, const MeshOptions& opts)
         return delaunay(in.points, opts);
     }
 
+    // Optional feature-edge recovery: augment the PLC's point set with Steiner
+    // points so every facet edge appears as a chain of mesh edges, then mesh the
+    // augmented PLC (facets unchanged; the Steiner points lie on facet edges).
+    PLC augmented;
+    const PLC* work = &in;
+    if (opts.preserve_edges) {
+        auto segs = recover::facet_segments(in);
+        std::size_t budget = opts.steiner_budget
+                                 ? static_cast<std::size_t>(*opts.steiner_budget)
+                                 : 100000;
+        auto rec = recover::recover_segments(in.points, segs, budget);
+        augmented = in;
+        augmented.points = std::move(rec.points);
+        work = &augmented;
+    }
+
     // Faceted PLC: boundary-conforming tetrahedralization; refine if requested.
     if (opts.quality.has_value() || opts.max_volume || opts.sizing) {
-        return quality::refine(in.points, &in, opts);
+        return quality::refine(work->points, work, opts);
     }
-    return cdt::tetrahedralize_plc(in, opts);
+    return cdt::tetrahedralize_plc(*work, opts);
 }
 
 } // namespace cmg

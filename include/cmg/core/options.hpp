@@ -37,6 +37,7 @@ enum class PredicateMode {
 struct MeshOptions {
     bool plc = false;               ///< -p: tetrahedralize a PLC
     bool preserve_surface = false;  ///< -Y: do not split input boundary faces
+    bool preserve_edges = false;    ///< recover PLC facet edges as mesh-edge chains
     bool reconstruct = false;       ///< -r: refine/reconstruct an existing mesh
     bool weighted = false;          ///< -w: weighted (regular) Delaunay
     bool convex = false;            ///< -c: retain the convex hull
