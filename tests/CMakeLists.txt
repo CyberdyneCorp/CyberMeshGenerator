@@ -7,6 +7,7 @@ add_executable(cmg_tests
     test_foundation.cpp test_delaunay.cpp test_constrained.cpp test_quality.cpp
     test_sizing.cpp test_region.cpp test_voronoi.cpp test_recovery.cpp
     test_optimize.cpp test_constraints.cpp test_voronoi_io.cpp
+    test_facet_recovery.cpp
     test_cli.cpp test_reconstruct.cpp test_coarsen.cpp test_simplify.cpp
     test_voxelize.cpp
     test_metrics.cpp test_detect.cpp test_backend.cpp

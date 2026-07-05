@@ -1,6 +1,9 @@
 // CyberMeshGenerator — region attributes and hole classification (internal).
 #pragma once
 
+#include <array>
+#include <set>
+
 #include "cmg/core/mesh.hpp"
 #include "cmg/core/plc.hpp"
 
@@ -12,6 +15,11 @@ namespace cmg::region {
 /// when `label_regions` is set — give every surviving unseeded component a distinct
 /// nonzero label. Recomputes the boundary faces afterward. A no-op when the PLC has
 /// no regions or holes and `label_regions` is false.
-void apply(Mesh& mesh, const PLC& plc, bool label_regions);
+///
+/// `constraint_faces` (optional) are recovered PLC facet subfaces, as sorted vertex
+/// triples: two tetrahedra sharing such a face are NOT merged into the same
+/// component, so an internal facet separates the regions on its two sides.
+void apply(Mesh& mesh, const PLC& plc, bool label_regions,
+           const std::set<std::array<int, 3>>* constraint_faces = nullptr);
 
 } // namespace cmg::region
