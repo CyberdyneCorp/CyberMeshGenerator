@@ -32,9 +32,16 @@ from mpl_toolkits.mplot3d.art3d import Poly3DCollection
 
 import cybermesh as cm
 
+try:
+    import trimesh  # optional reference voxelizer for comparison
+except ImportError:
+    trimesh = None
+
 HERE = Path(__file__).parent
 STL = HERE / "Stanford_Bunny_sample.stl"
 GRID = 34  # vertex-clustering resolution for meshing (higher = finer, slower)
+VOX_METRIC_RES = 48  # grid resolution for the IoU / volume comparison
+VOX_RENDER_RES = 28  # coarser grid for the blocky voxel render
 
 
 def load_and_simplify(path: Path, grid=GRID):
@@ -129,6 +136,109 @@ def render_tetmesh(ax, mesh):
                  f"{len(bfaces)} cut faces", fontsize=10)
 
 
+def grid_centers(vg):
+    """World coordinates of every cell center of a cybermesh VoxelGrid, (nx,ny,nz,3)."""
+    nx, ny, nz = vg.dims
+    i, j, k = np.meshgrid(np.arange(nx), np.arange(ny), np.arange(nz), indexing="ij")
+    return np.stack([vg.origin[0] + i * vg.spacing,
+                     vg.origin[1] + j * vg.spacing,
+                     vg.origin[2] + k * vg.spacing], axis=-1)
+
+
+def trimesh_occupancy_on(P, F, vg):
+    """Reference occupancy sampled onto OUR grid `vg`: trimesh's solid voxelization
+    (surface voxels + morphological fill) at the same pitch, read back at our cell
+    centers so the two grids are cell-aligned for a fair IoU."""
+    tm = trimesh.Trimesh(vertices=np.asarray(P), faces=np.asarray(F), process=False)
+    vtm = tm.voxelized(pitch=vg.spacing).fill()
+    idx = vtm.points_to_indices(grid_centers(vg).reshape(-1, 3))
+    m = vtm.matrix
+    ok = np.all((idx >= 0) & (idx < np.array(m.shape)), axis=1)
+    ref = np.zeros(len(idx), bool)
+    hit = idx[ok]
+    ref[ok] = m[hit[:, 0], hit[:, 1], hit[:, 2]]
+    return ref.reshape(vg.dims)
+
+
+def render_voxels(ax, occ, color, title):
+    ax.voxels(occ, facecolors=color, edgecolor=(0, 0, 0, 0.12), linewidth=0.1)
+    ax.set_box_aspect(occ.shape)
+    ax.set_axis_off()
+    ax.set_title(title, fontsize=10)
+
+
+def render_diff(ax, ours, ref, title):
+    """Agreement view: gray = both, blue = ours only, orange = trimesh only."""
+    both, only_ours, only_ref = ours & ref, ours & ~ref, ref & ~ours
+    filled = both | only_ours | only_ref
+    colors = np.zeros(filled.shape + (4,))
+    colors[both] = (0.60, 0.60, 0.60, 0.85)
+    colors[only_ours] = (0.30, 0.50, 0.85, 0.95)
+    colors[only_ref] = (0.95, 0.55, 0.20, 0.95)
+    ax.voxels(filled, facecolors=colors, edgecolor=(0, 0, 0, 0.06), linewidth=0.05)
+    ax.set_box_aspect(filled.shape)
+    ax.set_axis_off()
+    ax.set_title(title, fontsize=10)
+
+
+def voxel_comparison(plc, P, F):
+    """Voxelize the bunny with our algorithm and, when trimesh is available, compare to
+    its solid voxelization (IoU / Dice / volume, both vs the divergence-theorem volume),
+    writing bunny_voxelization.png.
+
+    Uses the FULL watertight surface (not the decimated one the tet-carve needs): the
+    exact ray-parity classifier is only guaranteed on watertight input — a hole would let
+    a column's parity leak into a spurious spike — and our voxelizer handles the full
+    112k-triangle mesh directly (the carve required decimation, voxelization does not)."""
+    v_true = surface_volume(P, F)
+    ours = cm.voxelize(plc, resolution=VOX_METRIC_RES, mode="occupancy")
+    ob = ours.grid.astype(bool)
+    vol_ours = int(ob.sum()) * ours.spacing ** 3
+    print(f"  our voxels (res {VOX_METRIC_RES}): {int(ob.sum())} occupied, "
+          f"volume {vol_ours:.0f} ({100 * vol_ours / v_true:.1f}% of enclosed)")
+
+    metrics = None
+    if trimesh is not None:
+        ref = trimesh_occupancy_on(P, F, ours)
+        inter, union = int((ob & ref).sum()), int((ob | ref).sum())
+        vol_ref = int(ref.sum()) * ours.spacing ** 3
+        metrics = dict(iou=inter / union, dice=2 * inter / (ob.sum() + ref.sum()),
+                       agree=float((ob == ref).mean()), vol_ref=vol_ref)
+        print(f"  vs trimesh: IoU={metrics['iou']:.3f} Dice={metrics['dice']:.3f} "
+              f"cell-agree={100 * metrics['agree']:.1f}%  trimesh volume {vol_ref:.0f} "
+              f"({100 * vol_ref / v_true:.1f}% of enclosed)")
+    else:
+        print("  (trimesh not installed — reference comparison skipped; pip install trimesh)")
+
+    # Coarser grid for the blocky render (both tools sampled on the same render grid).
+    rvg = cm.voxelize(plc, resolution=VOX_RENDER_RES, mode="occupancy")
+    our_r = rvg.grid.astype(bool)
+    panels = [lambda ax: render_voxels(ax, our_r, "#4a78c0",
+              f"CyberMeshGenerator voxels\n{'x'.join(map(str, rvg.dims))} · "
+              f"{int(our_r.sum())} cells")]
+    if trimesh is not None:
+        ref_r = trimesh_occupancy_on(P, F, rvg)
+        panels.append(lambda ax: render_voxels(ax, ref_r, "#e08a33",
+                      f"trimesh voxels (reference)\n{int(ref_r.sum())} cells"))
+        panels.append(lambda ax: render_diff(ax, our_r, ref_r,
+                      "agreement\ngray both · blue ours · orange trimesh"))
+
+    fig = plt.figure(figsize=(5.5 * len(panels), 5.5))
+    for i, fn in enumerate(panels):
+        ax = fig.add_subplot(1, len(panels), i + 1, projection="3d")
+        ax.view_init(elev=18, azim=130)
+        fn(ax)
+    sub = "CyberMeshGenerator voxelization"
+    if metrics:
+        sub += (f" vs trimesh — IoU {metrics['iou']:.2f}, Dice {metrics['dice']:.2f}; "
+                f"solid volume {100 * vol_ours / v_true:.0f}% (ours) vs "
+                f"{100 * metrics['vol_ref'] / v_true:.0f}% (trimesh) of the enclosed volume")
+    fig.suptitle(sub, fontsize=12, y=1.02)
+    fig.tight_layout(rect=[0, 0, 1, 0.95])
+    fig.savefig(HERE / "bunny_voxelization.png", dpi=130, bbox_inches="tight")
+    print("Wrote", HERE / "bunny_voxelization.png")
+
+
 def main():
     print("Loading + simplifying", STL.name, "natively (cm.read_plc / cm.simplify) ...")
     full_tris, sic = load_and_simplify(STL)
@@ -183,6 +293,10 @@ def main():
         fn(ax)
         f.savefig(HERE / name, dpi=130, bbox_inches="tight")
         print("Wrote", HERE / name)
+
+    print("Voxelizing the full watertight surface and comparing to trimesh ...")
+    full = cm.read_plc(str(STL))
+    voxel_comparison(full, full.points, full.triangles)
 
 
 if __name__ == "__main__":
