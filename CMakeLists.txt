@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.25)
 
 project(CyberMeshGenerator
-    VERSION 0.2.0
+    VERSION 0.3.0
     DESCRIPTION "Modern C++20 port of TetGen with CPU/CUDA/OpenCL/Metal acceleration"
     HOMEPAGE_URL "https://github.com/CyberdyneCorp/CyberMeshGenerator"
     LANGUAGES CXX

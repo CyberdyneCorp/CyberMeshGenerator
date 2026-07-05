@@ -75,7 +75,7 @@ flowchart LR
         direction TB
         IO["io · format dispatch"]
         PLCN["PLC · MeshOptions"]
-        ENG["Delaunay · constrained carve<br/>refinement · sizing · regions/holes<br/>Voronoi / power · optimize<br/>simplify · coarsen · reconstruct"]
+        ENG["Delaunay · constrained carve<br/>refinement · sizing · regions/holes<br/>Voronoi / power · optimize<br/>simplify · coarsen · reconstruct · voxelize"]
         PRED["Exact predicates<br/>(Shewchuk, -O0)"]
         IO --> PLCN --> ENG --> PRED
     end
@@ -92,6 +92,7 @@ flowchart LR
         O2[".node/.ele/.face<br/>.vtk · .mesh"]
         O3["Voronoi .v.*"]
         O4["NumPy arrays<br/>points · tetrahedra · faces"]
+        O5["Voxel grid<br/>occupancy · SDF"]
     end
 
     IN --> FE
@@ -172,6 +173,13 @@ volume equals the surface-enclosed volume to **0.2 %**.
 ([`examples/bunny`](examples/bunny))
 
 ![Stanford Bunny](examples/bunny/bunny_comparison.png)
+
+The same example also **voxelizes** the full watertight surface with `cybermesh.voxelize`
+and compares to the reference library [`trimesh`](https://trimesh.org): **IoU 0.85**, and
+our exact-predicate occupancy matches the enclosed volume to **~0.2 %** while trimesh's
+surface-voxel-plus-fill adds a one-cell boundary shell (the orange layer, right).
+
+![Bunny voxelization vs trimesh](examples/bunny/bunny_voxelization.png)
 
 ### Eiffel Tower — CyberMeshGenerator **vs real TetGen**
 
