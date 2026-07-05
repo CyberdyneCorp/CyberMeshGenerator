@@ -180,8 +180,9 @@ std::array<int, 3> sorted3(int a, int b, int c) {
 
 } // namespace
 
-expected<Mesh, MeshError> tetrahedralize_plc(const PLC& plc,
-                                             const MeshOptions& opts) {
+expected<Mesh, MeshError> tetrahedralize_plc(
+    const PLC& plc, const MeshOptions& opts,
+    const std::set<std::array<int, 3>>* constraint_faces) {
     auto dt = delaunay(plc.points, opts);
     if (!dt) return dt;
 
@@ -234,7 +235,7 @@ expected<Mesh, MeshError> tetrahedralize_plc(const PLC& plc,
 
     // Apply PLC regions/holes: assign material attributes, remove hole-seeded
     // components, optionally auto-label. No-op without regions/holes/label.
-    region::apply(out, plc, opts.label_regions);
+    region::apply(out, plc, opts.label_regions, constraint_faces);
     return out;
 }
 

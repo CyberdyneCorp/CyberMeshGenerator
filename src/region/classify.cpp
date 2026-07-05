@@ -69,12 +69,15 @@ void rebuild_boundary(Mesh& m) {
 
 } // namespace
 
-void apply(Mesh& mesh, const PLC& plc, bool label_regions) {
+void apply(Mesh& mesh, const PLC& plc, bool label_regions,
+           const std::set<std::array<int, 3>>* constraint_faces) {
     if (plc.regions.empty() && plc.holes.empty() && !label_regions) return;
     const int nt = static_cast<int>(mesh.tetrahedra.size());
     if (nt == 0) return;
 
-    // Connected components of the interior mesh via shared-face adjacency.
+    // Connected components of the interior mesh via shared-face adjacency. Two
+    // tetrahedra sharing a recovered constraint (facet) face are kept in distinct
+    // components, so an internal facet separates the regions on its two sides.
     DSU dsu(nt);
     std::map<std::array<int, 3>, int> face_owner;
     for (int i = 0; i < nt; ++i) {
@@ -84,8 +87,11 @@ void apply(Mesh& mesh, const PLC& plc, bool label_regions) {
         for (const auto& tri : f) {
             auto key = sorted3(tri[0], tri[1], tri[2]);
             auto it = face_owner.find(key);
-            if (it == face_owner.end()) face_owner[key] = i;
-            else dsu.unite(i, it->second);
+            if (it == face_owner.end()) {
+                face_owner[key] = i;
+            } else if (!constraint_faces || !constraint_faces->count(key)) {
+                dsu.unite(i, it->second);
+            }
         }
     }
 

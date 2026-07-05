@@ -8,10 +8,15 @@
 // return MeshErrorCode::NotImplemented rather than a wrong or partial mesh.
 #include "cmg/api.hpp"
 
+#include <algorithm>
+#include <array>
+#include <set>
+
 #include "cmg/constrained/tetrahedralize_plc.hpp"
 #include "cmg/delaunay/incremental.hpp"
 #include "cmg/predicates/robust.hpp"
 #include "cmg/quality/refine.hpp"
+#include "cmg/recover/facets.hpp"
 #include "cmg/recover/segments.hpp"
 
 namespace cmg {
@@ -89,27 +94,54 @@ expected<Mesh, MeshError> tetrahedralize(const PLC& in, const MeshOptions& opts)
         return delaunay(in.points, opts);
     }
 
+    const std::size_t budget = opts.steiner_budget
+                                   ? static_cast<std::size_t>(*opts.steiner_budget)
+                                   : 100000;
+
     // Optional feature-edge recovery: augment the PLC's point set with Steiner
     // points so every facet edge appears as a chain of mesh edges, then mesh the
     // augmented PLC (facets unchanged; the Steiner points lie on facet edges).
+    // Facet recovery implies edge recovery: recover facet-boundary edges first so
+    // they exist before their interiors are recovered.
     PLC augmented;
     const PLC* work = &in;
-    if (opts.preserve_edges) {
+    if (opts.preserve_edges || opts.preserve_facets) {
         auto segs = recover::facet_segments(in);
-        std::size_t budget = opts.steiner_budget
-                                 ? static_cast<std::size_t>(*opts.steiner_budget)
-                                 : 100000;
         auto rec = recover::recover_segments(in.points, segs, budget);
         augmented = in;
         augmented.points = std::move(rec.points);
         work = &augmented;
     }
 
+    // Optional facet recovery: after segment recovery, add Steiner points until
+    // every facet subface is a face of the Delaunay tetrahedralization, then treat
+    // those subfaces as region-separating constraint faces during classification.
+    // Scope (increment 1): this robustly recovers BOUNDARY facets (conserved volume,
+    // exact conformance). Internal facets separate regions only when recovery leaves
+    // them as mesh faces without the carve dropping a side; general internal-facet
+    // separation is deferred (the carve counts internal facets in its point-in-domain
+    // ray cast and drops an interior cell). See openspec add-facet-recovery non-goals.
+    std::set<std::array<int, 3>> constraint_faces;
+    const std::set<std::array<int, 3>>* cf = nullptr;
+    if (opts.preserve_facets) {
+        auto subs = recover::plc_subfaces(*work);
+        auto segs = recover::facet_segments(*work);
+        auto fr = recover::recover_facets(work->points, subs, budget, segs);
+        augmented.points = std::move(fr.points);
+        work = &augmented;
+        for (const auto& s : fr.subfaces) {
+            std::array<int, 3> key{s[0], s[1], s[2]};
+            std::sort(key.begin(), key.end());
+            constraint_faces.insert(key);
+        }
+        cf = &constraint_faces;
+    }
+
     // Faceted PLC: boundary-conforming tetrahedralization; refine if requested.
     if (opts.quality.has_value() || opts.max_volume || opts.sizing) {
         return quality::refine(work->points, work, opts);
     }
-    return cdt::tetrahedralize_plc(*work, opts);
+    return cdt::tetrahedralize_plc(*work, opts, cf);
 }
 
 } // namespace cmg

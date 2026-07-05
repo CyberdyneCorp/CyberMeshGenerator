@@ -110,6 +110,7 @@ add_library(cmg
     src/region/classify.cpp
     src/voronoi/voronoi.cpp
     src/recover/segments.cpp
+    src/recover/facets.cpp
     src/optimize/smooth.cpp
     src/io/constraints.cpp
     src/io/voronoi_io.cpp
