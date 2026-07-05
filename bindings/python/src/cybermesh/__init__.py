@@ -483,7 +483,11 @@ def voxelize(plc: PLC, resolution: int = 64, mode: str = "occupancy",
         else:
             grid = np.ctypeslib.as_array(
                 _lib.cmg_voxels_distance(handle), (n,)).astype(np.float32)
-        grid = grid.reshape((nx.value, ny.value, nz.value)).copy()
+        # The C ABI lays cells out flat as idx = (k*ny + j)*nx + i, i.e. C-order for
+        # shape (nz, ny, nx); transpose back to (nx, ny, nz) so grid[i, j, k] is the
+        # cell at (x_i, y_j, z_k). (A plain reshape((nx,ny,nz)) only works when the grid
+        # is cubic — it silently transposes the axes otherwise.)
+        grid = grid.reshape((nz.value, ny.value, nx.value)).transpose(2, 1, 0).copy()
         origin = np.array([ox.value, oy.value, oz.value], dtype=np.float64)
     finally:
         _lib.cmg_voxels_destroy(handle)

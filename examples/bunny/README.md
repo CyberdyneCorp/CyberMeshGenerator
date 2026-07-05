@@ -59,6 +59,31 @@ still-closed ~6.7k-triangle surface, then meshed to **~11k tetrahedra in ~4 s**.
 > the mesh through `cybermesh.tetrahedralize` with a `max_volume` for graded
 > refinement; this example keeps its dependencies to `numpy` + `matplotlib`.
 
+## Voxelization — vs `trimesh`
+
+The example also **voxelizes** the bunny with `cybermesh.voxelize` (exact-predicate solid
+occupancy) and, if [`trimesh`](https://trimesh.org) is installed, compares against its
+solid voxelizer (`mesh.voxelized(pitch).fill()`) resampled onto the same grid:
+
+![voxelization](bunny_voxelization.png)
+
+```
+our voxels (res 48): 24667 occupied, volume 280129 (100.2% of enclosed)
+vs trimesh: IoU=0.854 Dice=0.921 cell-agree=96.0%  trimesh volume 328007 (117.3% of enclosed)
+```
+
+- **Left** — our voxels; **middle** — trimesh's; **right** — agreement (gray = both,
+  blue = ours only, orange = trimesh only).
+- Both agree on ~96 % of cells (**IoU 0.85**). The difference is a **boundary shell**
+  (the orange layer): our exact vertical-ray-parity classifier marks the *interior*, so
+  the occupied volume matches the divergence-theorem enclosed volume to **~0.2 %**, while
+  trimesh's surface-voxels-plus-fill adds a one-cell surface shell and over-counts by
+  ~17 %. Neither is "wrong" — they answer slightly different questions (interior vs
+  surface-inclusive); our number is the one that conserves the true solid volume.
+- This uses the **full 112k-triangle watertight** surface directly (voxelization needs no
+  decimation, and the exact classifier is only guaranteed on watertight input — a hole
+  would let a column's parity leak into a spurious spike).
+
 ## Run it
 
 From this directory, after building the shared C ABI once from the repo root
@@ -69,5 +94,7 @@ CMG_C_LIB=$(readlink -f "$(find ../../build-py -name libcmg_c.so | head -1)") \
 PYTHONPATH=../../bindings/python/src python3 run_bunny.py
 ```
 
-Requires `numpy` + `matplotlib` (no GUI — renders offscreen via Agg). Outputs:
-`bunny_comparison.png`, `bunny_surface.png`, `bunny_tetmesh.png`.
+Requires `numpy` + `matplotlib` (no GUI — renders offscreen via Agg); `trimesh` is
+optional and only enables the voxelization comparison (skipped with a note if absent).
+Outputs: `bunny_comparison.png`, `bunny_surface.png`, `bunny_tetmesh.png`, and
+`bunny_voxelization.png`.
