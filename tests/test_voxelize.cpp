@@ -3,8 +3,10 @@
 #include "cmg/voxelize/voxelize.hpp"
 #include "harness.hpp"
 
+#include <algorithm>
 #include <array>
 #include <cmath>
+#include <limits>
 #include <map>
 #include <vector>
 
@@ -184,4 +186,90 @@ CMG_TEST("voxelize rejects invalid input") {
     CMG_CHECK(!voxelize::voxelize(cube, {.resolution = 0})); // resolution < 1
     PLC empty;
     CMG_CHECK(!voxelize::voxelize(empty, {.resolution = 8})); // no points
+}
+
+namespace {
+
+// Squared distance from p to triangle abc (independent brute-force reference).
+double ref_pt_tri_d2(const double p[3], const double a[3], const double b[3],
+                     const double c[3]) {
+    auto dot = [](const double u[3], const double v[3]) {
+        return u[0] * v[0] + u[1] * v[1] + u[2] * v[2];
+    };
+    double ab[3] = {b[0]-a[0], b[1]-a[1], b[2]-a[2]};
+    double ac[3] = {c[0]-a[0], c[1]-a[1], c[2]-a[2]};
+    double ap[3] = {p[0]-a[0], p[1]-a[1], p[2]-a[2]};
+    auto d2q = [&](const double q[3]) {
+        double t[3] = {p[0]-q[0], p[1]-q[1], p[2]-q[2]};
+        return dot(t, t);
+    };
+    double d1 = dot(ab, ap), d2 = dot(ac, ap);
+    if (d1 <= 0 && d2 <= 0) return d2q(a);
+    double bp[3] = {p[0]-b[0], p[1]-b[1], p[2]-b[2]};
+    double d3 = dot(ab, bp), d4 = dot(ac, bp);
+    if (d3 >= 0 && d4 <= d3) return d2q(b);
+    double vc = d1*d4 - d3*d2;
+    if (vc <= 0 && d1 >= 0 && d3 <= 0) {
+        double v = d1 / (d1 - d3), q[3] = {a[0]+v*ab[0], a[1]+v*ab[1], a[2]+v*ab[2]};
+        return d2q(q);
+    }
+    double cp[3] = {p[0]-c[0], p[1]-c[1], p[2]-c[2]};
+    double d5 = dot(ab, cp), d6 = dot(ac, cp);
+    if (d6 >= 0 && d5 <= d6) return d2q(c);
+    double vb = d5*d2 - d1*d6;
+    if (vb <= 0 && d2 >= 0 && d6 <= 0) {
+        double w = d2 / (d2 - d6), q[3] = {a[0]+w*ac[0], a[1]+w*ac[1], a[2]+w*ac[2]};
+        return d2q(q);
+    }
+    double va = d3*d6 - d5*d4;
+    if (va <= 0 && (d4-d3) >= 0 && (d5-d6) >= 0) {
+        double w = (d4-d3) / ((d4-d3)+(d5-d6));
+        double q[3] = {b[0]+w*(c[0]-b[0]), b[1]+w*(c[1]-b[1]), b[2]+w*(c[2]-b[2])};
+        return d2q(q);
+    }
+    double den = 1.0 / (va+vb+vc), v = vb*den, w = vc*den;
+    double q[3] = {a[0]+ab[0]*v+ac[0]*w, a[1]+ab[1]*v+ac[1]*w, a[2]+ab[2]*v+ac[2]*w};
+    return d2q(q);
+}
+
+std::vector<std::array<int, 3>> plc_triangles(const PLC& p) {
+    std::vector<std::array<int, 3>> t;
+    for (const Facet& f : p.facets)
+        for (const Polygon& poly : f.polygons)
+            for (std::size_t i = 2; i < poly.vertices.size(); ++i)
+                t.push_back({poly.vertices[0], poly.vertices[i-1], poly.vertices[i]});
+    return t;
+}
+
+} // namespace
+
+CMG_TEST("accelerated signed distance equals a brute-force reference") {
+    PLC s = sphere_plc(1.0, 16, 16); // ~450 triangles — exercises the ring search
+    const int R = 20;
+    auto g = voxelize::voxelize(s, {.resolution = R, .pad = 1,
+                                    .mode = voxelize::VoxelMode::SignedDistance});
+    CMG_CHECK(bool(g));
+
+    const auto tris = plc_triangles(s);
+    double worst = 0;
+    for (int k = 0; k < g->nz; ++k)
+        for (int j = 0; j < g->ny; ++j)
+            for (int i = 0; i < g->nx; ++i) {
+                double p[3] = {double(g->origin.x) + i * g->spacing,
+                               double(g->origin.y) + j * g->spacing,
+                               double(g->origin.z) + k * g->spacing};
+                double best = std::numeric_limits<double>::max();
+                for (const auto& t : tris) {
+                    double a[3] = {double(s.points[t[0]].x), double(s.points[t[0]].y),
+                                   double(s.points[t[0]].z)};
+                    double b[3] = {double(s.points[t[1]].x), double(s.points[t[1]].y),
+                                   double(s.points[t[1]].z)};
+                    double c[3] = {double(s.points[t[2]].x), double(s.points[t[2]].y),
+                                   double(s.points[t[2]].z)};
+                    best = std::min(best, ref_pt_tri_d2(p, a, b, c));
+                }
+                double got = std::fabs(g->distance[g->index(i, j, k)]);
+                worst = std::max(worst, std::fabs(std::sqrt(best) - got));
+            }
+    CMG_CHECK(worst < 1e-5); // the spatial index finds the true nearest triangle
 }

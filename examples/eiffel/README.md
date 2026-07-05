@@ -49,8 +49,8 @@ of through-holes). That changes what voxelization *means*:
 ![voxelization](eiffel_voxelization.png)
 
 ```
-our occupancy (solid core): 1111 cells;  SDF surface shell: 2650 cells
-surface vs trimesh: IoU=0.704 Dice=0.827 (ours 2650 vs trimesh 2526 surface cells)
+our occupancy (solid core): 533 cells;  SDF surface shell: 2648 cells
+surface vs trimesh: IoU=0.684 Dice=0.812 (ours 2648 vs trimesh 2639 surface cells)
 ```
 
 - **Left — solid occupancy.** Our exact ray-parity fills only the genuinely *enclosed*
@@ -61,12 +61,13 @@ surface vs trimesh: IoU=0.704 Dice=0.827 (ours 2650 vs trimesh 2526 surface cell
 - **Middle / right — surface voxelization.** The well-defined notion for an open surface
   is "which cells does the surface pass through". Our **signed-distance field** gives it
   (`|sdf| < 0.7·spacing`) — SDF is defined for any mesh, open or closed — and it matches
-  trimesh's surface voxels at **IoU 0.70 / Dice 0.83**.
+  trimesh's surface voxels at **IoU 0.68 / Dice 0.81** (2648 vs 2639 cells).
 
-The tower is lightly decimated (`cm.simplify(grid=120)`, ~35k of 140k triangles) only to
-keep the **brute-force SDF** tractable — occupancy runs on the full 140k-triangle mesh
-directly. (A watertight input is required for the *exact* solid classifier; a spatial
-index for the SDF is a documented follow-up.)
+Everything here runs on the **full 140k-triangle mesh** — the SDF is spatially indexed
+(a uniform triangle grid + expanding-ring nearest search), so no pre-decimation is needed
+(~4.6 s for the full-mesh SDF at this resolution). (A watertight input is still required
+for the *exact solid* classifier; the tower being an open lattice is why the occupancy
+core, not a full solid, is what parity recovers.)
 
 ## Run it
 
