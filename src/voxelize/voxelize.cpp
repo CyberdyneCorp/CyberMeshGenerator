@@ -246,9 +246,88 @@ double point_tri_dist2(const double p[3], const double a[3], const double b[3],
     return dist2(q);
 }
 
-// Signed distance per cell: nearest boundary-triangle distance, signed by the
-// inside/outside parity (negative inside). Brute force over triangles is acceptable for
-// v1 (acceleration is an explicit non-goal).
+// One 3-D bucket grid over the voxel grid: a triangle is registered in every cell its
+// AABB overlaps, so the nearest-triangle search only visits nearby cells.
+std::vector<std::vector<int>> build_xyz_buckets(const Grid& g,
+                                                const std::vector<Point3>& pts,
+                                                const std::vector<Tri>& tris) {
+    std::vector<std::vector<int>> cells(
+        static_cast<std::size_t>(g.nx) * g.ny * g.nz);
+    auto axis_cell = [&](double c, int a, int n) {
+        int i = static_cast<int>(std::floor((c - g.corner[a]) / g.spacing));
+        return i < 0 ? 0 : (i >= n ? n - 1 : i);
+    };
+    for (int t = 0; t < static_cast<int>(tris.size()); ++t) {
+        int i0 = g.nx, i1 = 0, j0 = g.ny, j1 = 0, k0 = g.nz, k1 = 0;
+        for (int v = 0; v < 3; ++v) {
+            const Point3& p = pts[tris[t][v]];
+            int i = axis_cell(p.x, 0, g.nx), j = axis_cell(p.y, 1, g.ny),
+                k = axis_cell(p.z, 2, g.nz);
+            i0 = std::min(i0, i); i1 = std::max(i1, i);
+            j0 = std::min(j0, j); j1 = std::max(j1, j);
+            k0 = std::min(k0, k); k1 = std::max(k1, k);
+        }
+        for (int k = k0; k <= k1; ++k)
+            for (int j = j0; j <= j1; ++j)
+                for (int i = i0; i <= i1; ++i)
+                    cells[(static_cast<std::size_t>(k) * g.ny + j) * g.nx + i]
+                        .push_back(t);
+    }
+    return cells;
+}
+
+// Call `f(i,j,k)` for every cell on the Chebyshev shell of radius r around (ci,cj,ck)
+// (the boundary of the (2r+1)^3 box), enumerating only the shell — O(r^2), not O(r^3).
+template <class F>
+void for_shell(int ci, int cj, int ck, int r, F&& f) {
+    if (r == 0) { f(ci, cj, ck); return; }
+    for (int s : {-r, r})                                  // two full z-faces
+        for (int dj = -r; dj <= r; ++dj)
+            for (int di = -r; di <= r; ++di) f(ci + di, cj + dj, ck + s);
+    for (int s : {-r, r})                                  // two y-faces (z interior)
+        for (int dk = -r + 1; dk <= r - 1; ++dk)
+            for (int di = -r; di <= r; ++di) f(ci + di, cj + s, ck + dk);
+    for (int s : {-r, r})                                  // two x-faces (y,z interior)
+        for (int dk = -r + 1; dk <= r - 1; ++dk)
+            for (int dj = -r + 1; dj <= r - 1; ++dj) f(ci + s, cj + dj, ck + dk);
+}
+
+// Squared distance from cell (ci,cj,ck)'s center `p` to the nearest boundary triangle,
+// via expanding Chebyshev rings over the 3-D buckets. A cell on ring r is at least
+// (r-1)*spacing from p, so once that bound exceeds the best distance found no closer
+// triangle can exist and the search stops. `seen`/`stamp` dedup triangles across rings.
+double nearest_tri_dist2(const Grid& g, int ci, int cj, int ck, const double p[3],
+                         const std::vector<std::vector<int>>& buckets,
+                         const std::vector<std::array<double, 3>>& tri_pts,
+                         std::vector<int>& seen, int stamp) {
+    double best = std::numeric_limits<double>::max();
+    const int max_r = g.nx + g.ny + g.nz;
+    for (int r = 0; r <= max_r; ++r) {
+        double ring_min = (r - 1) * g.spacing;
+        if (r > 0 && best != std::numeric_limits<double>::max() &&
+            ring_min * ring_min >= best)
+            break; // no unsearched cell can hold a closer triangle
+        bool any_in_bounds = false;
+        for_shell(ci, cj, ck, r, [&](int i, int j, int k) {
+            if (i < 0 || i >= g.nx || j < 0 || j >= g.ny || k < 0 || k >= g.nz) return;
+            any_in_bounds = true;
+            for (int t : buckets[(static_cast<std::size_t>(k) * g.ny + j) * g.nx + i]) {
+                if (seen[t] == stamp) continue;
+                seen[t] = stamp;
+                best = std::min(best, point_tri_dist2(p, tri_pts[t * 3].data(),
+                                                      tri_pts[t * 3 + 1].data(),
+                                                      tri_pts[t * 3 + 2].data()));
+            }
+        });
+        if (!any_in_bounds && best != std::numeric_limits<double>::max())
+            break; // rings have left the grid and a triangle was already found
+    }
+    return best;
+}
+
+// Signed distance per cell: nearest boundary-triangle distance (via the 3-D spatial
+// index above), signed by the inside/outside parity (negative inside). Exact — identical
+// to testing every triangle, but scales sub-linearly in triangle count.
 std::vector<float> fill_distance(const Grid& g, const std::vector<Point3>& pts,
                                  const std::vector<Tri>& tris,
                                  const std::vector<std::uint8_t>& occ) {
@@ -260,17 +339,17 @@ std::vector<float> fill_distance(const Grid& g, const std::vector<Point3>& pts,
             const Point3& p = pts[tris[t][v]];
             tri_pts[t * 3 + v] = {double(p.x), double(p.y), double(p.z)};
         }
+    const auto buckets = build_xyz_buckets(g, pts, tris);
+    std::vector<int> seen(tris.size(), -1);
+    int stamp = 0;
     for (int k = 0; k < g.nz; ++k)
         for (int j = 0; j < g.ny; ++j)
             for (int i = 0; i < g.nx; ++i) {
                 double center[3] = {g.corner[0] + (i + 0.5) * g.spacing,
                                     g.corner[1] + (j + 0.5) * g.spacing,
                                     g.corner[2] + (k + 0.5) * g.spacing};
-                double best = std::numeric_limits<double>::max();
-                for (std::size_t t = 0; t < tris.size(); ++t)
-                    best = std::min(best, point_tri_dist2(center, tri_pts[t * 3].data(),
-                                                          tri_pts[t * 3 + 1].data(),
-                                                          tri_pts[t * 3 + 2].data()));
+                double best = nearest_tri_dist2(g, i, j, k, center, buckets, tri_pts,
+                                                seen, stamp++);
                 std::size_t idx = (static_cast<std::size_t>(k) * g.ny + j) * g.nx + i;
                 double d = std::sqrt(best);
                 dist[idx] = static_cast<float>(occ[idx] ? -d : d);

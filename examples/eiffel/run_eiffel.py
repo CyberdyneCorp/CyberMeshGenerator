@@ -43,8 +43,6 @@ except ImportError:
 
 HERE = Path(__file__).parent
 GRID = 48
-VOX_SIMPLIFY = 120   # light decimation (~35k of 140k tris) — keeps detail, makes the
-                     # brute-force SDF tractable; the tower is an open lattice regardless
 VOX_RES = 48         # voxel resolution along the longest (height) axis
 SHELL_THRESH = 0.7   # * spacing — |sdf| band matching trimesh's surface-voxel convention
 
@@ -175,11 +173,13 @@ def voxel_comparison(stl):
     solid occupancy is ill-defined: our exact ray-parity fills only the genuinely
     *enclosed* core (the central spine + spire — still recognizably the tower). The
     well-defined comparison for an open surface is SURFACE voxelization: our SDF band
-    (|sdf| < 0.7·spacing) vs trimesh's surface voxels."""
+    (|sdf| < 0.7·spacing) vs trimesh's surface voxels.
+
+    The SDF is spatially indexed, so this runs on the FULL 140k-triangle mesh directly —
+    no pre-decimation needed."""
     full = cm.read_plc(str(stl))
-    s = cm.simplify(full, grid=VOX_SIMPLIFY)
-    print(f"  light simplify (grid {VOX_SIMPLIFY}): {s.triangles.shape[0]} of "
-          f"{full.triangles.shape[0]} tris")
+    s = full  # SDF is spatially indexed now — voxelize the full mesh, no decimation
+    print(f"  voxelizing the full {s.triangles.shape[0]}-triangle mesh")
 
     occ = cm.voxelize(s, resolution=VOX_RES, mode="occupancy")
     t = time.time(); sdf = cm.voxelize(s, resolution=VOX_RES, mode="sdf")
