@@ -1,9 +1,11 @@
 // CyberMeshGenerator — boundary-conforming tetrahedralization of a PLC.
 //
-// DT of the PLC vertices, then keep only the tetrahedra whose centroid is inside
-// the domain (ray-cast against the boundary facets). Exact (volume-conserving) for
-// convex / star-shaped domains; concave boundary conformance and exact facet
-// preservation are deferred (see the change design).
+// DT of the PLC vertices, then keep only the tetrahedra inside the domain. Two
+// classifiers: when recovered facet subfaces are supplied as constraint faces
+// (preserve_facets, recovery complete) a seed/flood carve floods the exterior in
+// from non-facet hull faces and keeps the rest — so an internal facet separating
+// the domain keeps the cells on both sides. Otherwise a per-centroid ray cast
+// against the boundary facets (exact for convex / star-shaped domains).
 #include "cmg/constrained/tetrahedralize_plc.hpp"
 
 #include <algorithm>
@@ -178,6 +180,70 @@ std::array<int, 3> sorted3(int a, int b, int c) {
     return k;
 }
 
+// The four triangular faces of a tetrahedron (each opposite one vertex).
+std::array<std::array<int, 3>, 4> tet_faces(const Tetrahedron& t) {
+    return {{{t[1], t[2], t[3]},
+             {t[0], t[2], t[3]},
+             {t[0], t[1], t[3]},
+             {t[0], t[1], t[2]}}};
+}
+
+// Seed/flood carve (TetGen's carveholes): classify tets interior/exterior by
+// flooding across faces that are NOT constraint (recovered facet) faces. A
+// convex-hull face (owned by exactly one tet) that is not a facet seeds the
+// exterior; the flood cannot cross a constraint face, so interior cells an
+// internal facet separates are never reached from outside and are all kept.
+// Requires recovery COMPLETE (every boundary facet is a constraint face) or the
+// flood leaks through the gap — the pipeline gates on that.
+std::vector<Tetrahedron> flood_carve(
+    const Mesh& dt, const std::set<std::array<int, 3>>& constraint_faces) {
+    const int nt = static_cast<int>(dt.tetrahedra.size());
+
+    // face -> owning tets (interior face: 2 owners, hull face: 1 owner).
+    struct Owners {
+        int n = 0;
+        int t[2] = {-1, -1};
+    };
+    std::map<std::array<int, 3>, Owners> owners;
+    for (int i = 0; i < nt; ++i)
+        for (const auto& f : tet_faces(dt.tetrahedra[i])) {
+            Owners& o = owners[sorted3(f[0], f[1], f[2])];
+            if (o.n < 2) o.t[o.n] = i;
+            ++o.n;
+        }
+
+    // Seed the exterior from every hull face that is not a domain facet.
+    std::vector<char> exterior(nt, 0);
+    std::vector<int> stack;
+    for (const auto& [key, o] : owners)
+        if (o.n == 1 && !constraint_faces.count(key) && !exterior[o.t[0]]) {
+            exterior[o.t[0]] = 1;
+            stack.push_back(o.t[0]);
+        }
+
+    // Flood across non-constraint faces; constraint faces block the flood.
+    while (!stack.empty()) {
+        int i = stack.back();
+        stack.pop_back();
+        for (const auto& f : tet_faces(dt.tetrahedra[i])) {
+            auto key = sorted3(f[0], f[1], f[2]);
+            if (constraint_faces.count(key)) continue;
+            const Owners& o = owners[key];
+            if (o.n != 2) continue;
+            int j = (o.t[0] == i) ? o.t[1] : o.t[0];
+            if (!exterior[j]) {
+                exterior[j] = 1;
+                stack.push_back(j);
+            }
+        }
+    }
+
+    std::vector<Tetrahedron> kept;
+    for (int i = 0; i < nt; ++i)
+        if (!exterior[i]) kept.push_back(dt.tetrahedra[i]);
+    return kept;
+}
+
 } // namespace
 
 expected<Mesh, MeshError> tetrahedralize_plc(
@@ -191,14 +257,20 @@ expected<Mesh, MeshError> tetrahedralize_plc(
         return unexpected(MeshError{MeshErrorCode::InvalidInput,
                                     "PLC has facets but no boundary triangles"});
 
-    // Keep tetrahedra whose centroid lies inside the domain, classified through a
-    // spatial index over the boundary triangles (identical result to brute force).
-    const CarveGrid grid(dt->points, tris);
+    // Classify interior tetrahedra. With recovered facet subfaces (constraint
+    // faces) available, flood the exterior in from non-facet hull faces so an
+    // internal facet keeps the cells on both of its sides; otherwise fall back to
+    // the per-centroid ray cast (exact for convex / star-shaped domains).
     std::vector<Tetrahedron> kept;
-    for (const Tetrahedron& t : dt->tetrahedra) {
-        Point3 c = centroid(dt->points[t[0]], dt->points[t[1]],
-                            dt->points[t[2]], dt->points[t[3]]);
-        if (grid.inside(c)) kept.push_back(t);
+    if (constraint_faces && !constraint_faces->empty()) {
+        kept = flood_carve(*dt, *constraint_faces);
+    } else {
+        const CarveGrid grid(dt->points, tris);
+        for (const Tetrahedron& t : dt->tetrahedra) {
+            Point3 c = centroid(dt->points[t[0]], dt->points[t[1]],
+                                dt->points[t[2]], dt->points[t[3]]);
+            if (grid.inside(c)) kept.push_back(t);
+        }
     }
     if (kept.empty())
         return unexpected(MeshError{

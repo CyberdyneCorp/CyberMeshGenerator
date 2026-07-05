@@ -116,11 +116,14 @@ expected<Mesh, MeshError> tetrahedralize(const PLC& in, const MeshOptions& opts)
     // Optional facet recovery: after segment recovery, add Steiner points until
     // every facet subface is a face of the Delaunay tetrahedralization, then treat
     // those subfaces as region-separating constraint faces during classification.
-    // Scope (increment 1): this robustly recovers BOUNDARY facets (conserved volume,
-    // exact conformance). Internal facets separate regions only when recovery leaves
-    // them as mesh faces without the carve dropping a side; general internal-facet
-    // separation is deferred (the carve counts internal facets in its point-in-domain
-    // ray cast and drops an interior cell). See openspec add-facet-recovery non-goals.
+    // The seed/flood carve uses those constraint faces to separate an internal
+    // facet's two sides, so general internal-facet region separation works whenever
+    // recovery COMPLETES (all boundary subfaces are DT faces). We pass the constraint
+    // faces to the carve only in that complete case: if recovery is incomplete a
+    // subface is missing and the flood would leak through the gap, so we fall back to
+    // the ray-cast carve (cf = nullptr), and region::apply likewise falls back to
+    // merging across the un-recovered wall. Non-terminating recovery on flat coplanar
+    // walls (cospherical points) remains a recovery limitation, not a carve one.
     std::set<std::array<int, 3>> constraint_faces;
     const std::set<std::array<int, 3>>* cf = nullptr;
     if (opts.preserve_facets) {
@@ -134,7 +137,7 @@ expected<Mesh, MeshError> tetrahedralize(const PLC& in, const MeshOptions& opts)
             std::sort(key.begin(), key.end());
             constraint_faces.insert(key);
         }
-        cf = &constraint_faces;
+        if (fr.complete && !constraint_faces.empty()) cf = &constraint_faces;
     }
 
     // Faceted PLC: boundary-conforming tetrahedralization; refine if requested.

@@ -156,10 +156,11 @@ added. (oracle: TetGen constrained-tetrahedralization; manual §4.2.2 conforming
 - WHEN it is tetrahedralized with `preserve_facets`
 - THEN the internal facet is present as mesh faces and the two cells receive distinct
   region markers (no tetrahedron straddles the facet)
-- NOTE: **general** internal-facet separation — where recovering the wall requires Steiner
-  points on it — is a non-goal of this increment (see the proposal): the carve counts
-  internal facets in its point-in-domain ray cast and drops an interior cell, and
-  conforming recovery does not terminate on a flat wall of coplanar points
+- NOTE: general internal-facet separation — where recovering the wall requires Steiner
+  points — is now delivered by the seed/flood-fill carve (see the requirement below); it
+  keeps the cells on both sides once recovery completes. Only non-terminating conforming
+  recovery on a flat wall of coplanar points remains deferred (a recovery limitation, not
+  a carve one)
 
 #### Scenario: Convex input is unchanged
 - GIVEN a convex PLC whose facets are already Delaunay faces
@@ -170,4 +171,29 @@ added. (oracle: TetGen constrained-tetrahedralization; manual §4.2.2 conforming
 - GIVEN a Steiner budget
 - WHEN facet recovery cannot complete within it
 - THEN recovery stops at the budget and reports incompleteness rather than looping
+
+### Requirement: Seed/flood-fill interior classification with recovered facets
+
+CyberMeshGenerator SHALL classify tetrahedra as interior/exterior by flood fill (rather than per-centroid ray casting) when recovered facet subfaces are available as constraint faces (under `preserve_facets`, after facet recovery completes): it SHALL seed the exterior from every convex-hull face (a face owned by exactly one tetrahedron) that is not a constraint face, flood across faces that are not constraint faces, remove the exterior-reachable tetrahedra, and keep the rest. Interior cells separated by an internal
+constraint facet SHALL all be kept (none dropped), and a convex or star-shaped domain
+SHALL be unchanged from the ray-cast result (no hull face is a non-facet, so nothing is
+seeded). When `preserve_facets` is off or facet recovery did not complete, it SHALL fall
+back to the ray-cast carve. (oracle: TetGen carveholes; manual §4.2.2)
+
+#### Scenario: An internal facet separates two regions (recovery completes)
+- GIVEN a PLC split by one internal facet whose recovery completes (e.g. a square bipyramid
+  needing a wall Steiner point), with a region seed on each side
+- WHEN it is tetrahedralized with `preserve_facets`
+- THEN both cells are kept, the total volume is conserved, the two cells receive distinct
+  region markers, and no tetrahedron straddles the facet
+
+#### Scenario: Non-convex boundary is unchanged
+- GIVEN a non-convex domain (e.g. an L-shaped prism) meshed with `preserve_facets`
+- WHEN the seed carve runs
+- THEN every boundary facet subface is a mesh face and the exact non-convex volume is
+  conserved (same result as before this change)
+
+#### Scenario: Convex domain is unchanged
+- GIVEN a convex PLC meshed with `preserve_facets`
+- THEN no exterior tetrahedra are seeded and the kept mesh equals the ray-cast result
 
