@@ -36,8 +36,17 @@ from mpl_toolkits.mplot3d.art3d import Poly3DCollection
 
 import cybermesh as cm
 
+try:
+    import trimesh  # optional reference voxelizer for the comparison
+except ImportError:
+    trimesh = None
+
 HERE = Path(__file__).parent
 GRID = 48
+VOX_SIMPLIFY = 120   # light decimation (~35k of 140k tris) — keeps detail, makes the
+                     # brute-force SDF tractable; the tower is an open lattice regardless
+VOX_RES = 48         # voxel resolution along the longest (height) axis
+SHELL_THRESH = 0.7   # * spacing — |sdf| band matching trimesh's surface-voxel convention
 
 
 def find_stl() -> Path:
@@ -128,6 +137,88 @@ def render_dt(ax, P, T, title, cmap):
     ax.set_title(title, fontsize=10)
 
 
+def grid_centers(vg):
+    """World coordinates of every cell center of a cybermesh VoxelGrid, (nx,ny,nz,3)."""
+    nx, ny, nz = vg.dims
+    i, j, k = np.meshgrid(np.arange(nx), np.arange(ny), np.arange(nz), indexing="ij")
+    return np.stack([vg.origin[0] + i * vg.spacing,
+                     vg.origin[1] + j * vg.spacing,
+                     vg.origin[2] + k * vg.spacing], axis=-1)
+
+
+def trimesh_surface_on(P, F, vg):
+    """Reference SURFACE voxels (cells the surface passes through — no solid fill,
+    which is the right notion for an open lattice) sampled onto OUR grid `vg`."""
+    tm = trimesh.Trimesh(vertices=np.asarray(P), faces=np.asarray(F), process=False)
+    vtm = tm.voxelized(pitch=vg.spacing)
+    idx = vtm.points_to_indices(grid_centers(vg).reshape(-1, 3))
+    m = vtm.matrix
+    ok = np.all((idx >= 0) & (idx < np.array(m.shape)), axis=1)
+    ref = np.zeros(len(idx), bool)
+    hit = idx[ok]
+    ref[ok] = m[hit[:, 0], hit[:, 1], hit[:, 2]]
+    return ref.reshape(vg.dims)
+
+
+def render_voxels(ax, occ, color, title):
+    ax.voxels(occ, facecolors=color, edgecolor=(0, 0, 0, 0.10), linewidth=0.05)
+    ax.set_box_aspect(occ.shape)
+    ax.set_axis_off()
+    ax.view_init(elev=12, azim=-60)
+    ax.set_title(title, fontsize=10)
+
+
+def voxel_comparison(stl):
+    """Voxelize the Eiffel with our library and compare to trimesh.
+
+    The Eiffel is an OPEN, high-genus lattice (a truss — not a watertight solid), so
+    solid occupancy is ill-defined: our exact ray-parity fills only the genuinely
+    *enclosed* core (the central spine + spire — still recognizably the tower). The
+    well-defined comparison for an open surface is SURFACE voxelization: our SDF band
+    (|sdf| < 0.7·spacing) vs trimesh's surface voxels."""
+    full = cm.read_plc(str(stl))
+    s = cm.simplify(full, grid=VOX_SIMPLIFY)
+    print(f"  light simplify (grid {VOX_SIMPLIFY}): {s.triangles.shape[0]} of "
+          f"{full.triangles.shape[0]} tris")
+
+    occ = cm.voxelize(s, resolution=VOX_RES, mode="occupancy")
+    t = time.time(); sdf = cm.voxelize(s, resolution=VOX_RES, mode="sdf")
+    sp = sdf.spacing
+    shell = np.abs(sdf.grid) < SHELL_THRESH * sp
+    print(f"  our occupancy (solid core): {int(occ.grid.sum())} cells;  "
+          f"SDF surface shell: {int(shell.sum())} cells ({time.time() - t:.1f}s)")
+
+    panels = [lambda ax: render_voxels(ax, occ.grid.astype(bool), "#6a97cf",
+              f"our solid occupancy (enclosed core)\n{int(occ.grid.sum())} cells")]
+    metrics = None
+    if trimesh is not None:
+        ref = trimesh_surface_on(s.points, s.triangles, sdf)
+        inter, union = int((shell & ref).sum()), int((shell | ref).sum())
+        metrics = dict(iou=inter / union, dice=2 * inter / (shell.sum() + ref.sum()))
+        print(f"  surface vs trimesh: IoU={metrics['iou']:.3f} Dice={metrics['dice']:.3f} "
+              f"(ours {int(shell.sum())} vs trimesh {int(ref.sum())} surface cells)")
+        panels += [lambda ax: render_voxels(ax, shell, "#4a78c0",
+                   f"our SDF surface shell\n{int(shell.sum())} cells"),
+                   lambda ax: render_voxels(ax, ref, "#e08a33",
+                   f"trimesh surface (reference)\n{int(ref.sum())} cells")]
+    else:
+        print("  (trimesh not installed — surface comparison skipped; pip install trimesh)")
+        panels.append(lambda ax: render_voxels(ax, shell, "#4a78c0",
+                      f"our SDF surface shell\n{int(shell.sum())} cells"))
+
+    fig = plt.figure(figsize=(4.5 * len(panels), 7))
+    for i, fn in enumerate(panels):
+        ax = fig.add_subplot(1, len(panels), i + 1, projection="3d")
+        fn(ax)
+    sub = "CyberMeshGenerator voxelization — Eiffel Tower (an OPEN lattice)"
+    if metrics:
+        sub += f" · surface IoU {metrics['iou']:.2f} vs trimesh"
+    fig.suptitle(sub, fontsize=12, y=1.0)
+    fig.tight_layout(rect=[0, 0, 1, 0.96])
+    fig.savefig(HERE / "eiffel_voxelization.png", dpi=130, bbox_inches="tight")
+    print("Wrote", HERE / "eiffel_voxelization.png")
+
+
 def main():
     stl = find_stl()
     print("Loading + simplifying", stl.name, "natively (cm.read_plc / cm.simplify) ...")
@@ -173,6 +264,9 @@ def main():
     fig.tight_layout(rect=[0, 0, 1, 0.95])
     fig.savefig(HERE / "eiffel_comparison.png", dpi=130, bbox_inches="tight")
     print("Wrote", HERE / "eiffel_comparison.png")
+
+    print("Voxelizing the Eiffel (open lattice) and comparing to trimesh ...")
+    voxel_comparison(stl)
 
 
 if __name__ == "__main__":
