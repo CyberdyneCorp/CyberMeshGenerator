@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.25)
 
 project(CyberMeshGenerator
-    VERSION 0.4.0
+    VERSION 0.5.0
     DESCRIPTION "Modern C++20 port of TetGen with CPU/CUDA/OpenCL/Metal acceleration"
     HOMEPAGE_URL "https://github.com/CyberdyneCorp/CyberMeshGenerator"
     LANGUAGES CXX
@@ -138,6 +138,12 @@ add_library(cmg
 )
 add_library(cmg::cmg ALIAS cmg)
 
+# Semver-tracked SONAME when built shared (CMG_BUILD_SHARED); ignored for a static
+# library. Lets consumers of a shared cmg pin against a compatible ABI.
+set_target_properties(cmg PROPERTIES
+    VERSION   ${PROJECT_VERSION}
+    SOVERSION ${PROJECT_VERSION_MAJOR})
+
 target_compile_features(cmg PUBLIC cxx_std_20)
 target_include_directories(cmg PUBLIC
     "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>"
@@ -215,4 +221,64 @@ endif()
 # -----------------------------------------------------------------------------
 if(CMG_BUILD_TESTS)
     add_subdirectory(tests)
+endif()
+
+# -----------------------------------------------------------------------------
+# Install + export — find_package(CyberMeshGenerator)
+#
+# Produces an installable package with a CyberMeshGeneratorConfig.cmake so
+# downstream projects can `find_package(CyberMeshGenerator)` and link `cmg::cmg`
+# (and `cmg::c` when the C ABI was built). The core `cmg` library is CPU-only with
+# no external dependencies, so the installed package is self-contained; the
+# optional NumPP/SciPP/Threads links are re-resolved by the generated config via
+# find_dependency only when they were part of the build.
+# -----------------------------------------------------------------------------
+option(CMG_INSTALL "Generate install + find_package(CyberMeshGenerator) rules" ON)
+
+if(CMG_INSTALL)
+    include(GNUInstallDirs)
+    include(CMakePackageConfigHelpers)
+
+    # Public headers: the hand-written tree plus the generated version/config
+    # headers. The `.hpp.in` templates are configured into the generated tree, so
+    # keep them out of the installed include dir.
+    install(DIRECTORY include/ DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
+            PATTERN "*.in" EXCLUDE)
+    install(DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/generated/"
+            DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
+
+    # Export under a clean name so the installed target matches the in-tree alias
+    # (cmg::cmg), not cmg::cmg-with-the-raw-target-name.
+    set_target_properties(cmg PROPERTIES EXPORT_NAME cmg)
+    install(TARGETS cmg EXPORT CyberMeshGeneratorTargets
+        RUNTIME  DESTINATION ${CMAKE_INSTALL_BINDIR}
+        LIBRARY  DESTINATION ${CMAKE_INSTALL_LIBDIR}
+        ARCHIVE  DESTINATION ${CMAKE_INSTALL_LIBDIR})
+
+    # The C ABI shim is exported (as cmg::c) with its public header only when built.
+    if(TARGET cmg_c)
+        install(DIRECTORY bindings/c/include/ DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
+        install(TARGETS cmg_c EXPORT CyberMeshGeneratorTargets
+            RUNTIME  DESTINATION ${CMAKE_INSTALL_BINDIR}
+            LIBRARY  DESTINATION ${CMAKE_INSTALL_LIBDIR}
+            ARCHIVE  DESTINATION ${CMAKE_INSTALL_LIBDIR})
+    endif()
+
+    install(EXPORT CyberMeshGeneratorTargets
+        FILE CyberMeshGeneratorTargets.cmake
+        NAMESPACE cmg::
+        DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/CyberMeshGenerator)
+
+    configure_package_config_file(
+        ${CMAKE_CURRENT_SOURCE_DIR}/cmake/CyberMeshGeneratorConfig.cmake.in
+        ${CMAKE_CURRENT_BINARY_DIR}/CyberMeshGeneratorConfig.cmake
+        INSTALL_DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/CyberMeshGenerator)
+    write_basic_package_version_file(
+        ${CMAKE_CURRENT_BINARY_DIR}/CyberMeshGeneratorConfigVersion.cmake
+        VERSION ${PROJECT_VERSION}
+        COMPATIBILITY SameMajorVersion)
+    install(FILES
+        ${CMAKE_CURRENT_BINARY_DIR}/CyberMeshGeneratorConfig.cmake
+        ${CMAKE_CURRENT_BINARY_DIR}/CyberMeshGeneratorConfigVersion.cmake
+        DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/CyberMeshGenerator)
 endif()
