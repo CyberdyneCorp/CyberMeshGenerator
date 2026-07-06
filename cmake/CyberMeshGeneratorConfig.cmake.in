@@ -1,0 +1,21 @@
+@PACKAGE_INIT@
+
+# The core cmg library is CPU-only and self-contained. The optional NumPP / SciPP
+# integrations and the multithreaded CPU path link external packages into the
+# installed targets, so re-resolve exactly those the build actually enabled (the
+# same CONFIG packages the build used).
+include(CMakeFindDependencyMacro)
+
+if(@CMG_WITH_NUMPP@)
+    find_dependency(NumPP CONFIG)
+endif()
+if(@CMG_WITH_SCIPP@)
+    find_dependency(SciPP CONFIG)
+endif()
+if(@CMG_WITH_THREADS@)
+    find_dependency(Threads)
+endif()
+
+include("${CMAKE_CURRENT_LIST_DIR}/CyberMeshGeneratorTargets.cmake")
+
+check_required_components(CyberMeshGenerator)

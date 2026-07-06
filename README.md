@@ -236,6 +236,42 @@ is used only as a test oracle. Shewchuk's robust predicates are public-domain an
 retain that origin. See [`NOTICE.md`](NOTICE.md) for the full provenance and
 attribution.
 
+## Versioning & API stability
+
+CyberMeshGenerator follows [Semantic Versioning](https://semver.org). The version lives in the
+CMake `project(... VERSION)` and is surfaced to C++ via `cmg::version_string` (from
+`<cmg/version.hpp>`) and to Python via `cybermesh.version()`. Notable changes are recorded in
+[`CHANGELOG.md`](CHANGELOG.md).
+
+- **Pre-1.0 (`0.x`):** the API is stabilizing. Minor releases may include breaking API/ABI
+  changes; each is called out in the changelog. Pin an exact version if you need stability.
+- **C++ / CLI:** the primary surface is the typed `cmg::` API (`MeshOptions`, `PLC`, `Mesh`,
+  `cmg::expected`). The TetGen switch string is a compatibility layer, not the canonical API.
+- **C ABI (`libcmg_c`):** the stable boundary the Python and Swift bindings sit on. The shared
+  library carries a `SOVERSION` (its major version) so consumers can pin against a compatible ABI.
+- **Installing / consuming:** `find_package(CyberMeshGenerator)` exports `cmg::cmg` (and `cmg::c`
+  when the C ABI is built). See [Install](#install) below.
+
+## Install
+
+The core library installs as a self-contained CMake package (CPU-only, no external dependencies):
+
+```bash
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+cmake --build build -j
+cmake --install build --prefix /your/prefix
+```
+
+Downstream projects then consume it with standard discovery — no vendoring, no manual paths:
+
+```cmake
+find_package(CyberMeshGenerator CONFIG REQUIRED)
+target_link_libraries(my_app PRIVATE cmg::cmg)   # or cmg::c for the C ABI
+```
+
+Optional NumPP/SciPP integrations (and Threads) are re-resolved transitively by the installed
+config. Disable install-rule generation with `-DCMG_INSTALL=OFF`.
+
 ## Reference
 
 - Oracle / reference implementation: TetGen 1.6.0 (`/home/leonardo/work/TetGen`).

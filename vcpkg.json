@@ -1,6 +1,6 @@
 {
   "name": "cybermeshgenerator",
-  "version": "0.1.0",
+  "version": "0.5.0",
   "description": "Modern C++20 port of TetGen with CPU/CUDA/OpenCL/Metal acceleration and Python/Swift bindings",
   "homepage": "https://github.com/CyberdyneCorp/CyberMeshGenerator",
   "dependencies": [],
