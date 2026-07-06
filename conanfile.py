@@ -4,7 +4,7 @@ from conan.tools.cmake import CMake, CMakeToolchain, cmake_layout
 
 class CyberMeshGeneratorConan(ConanFile):
     name = "cybermeshgenerator"
-    version = "0.1.0"
+    version = "0.5.0"
     description = "Modern C++20 port of TetGen with CPU/CUDA/OpenCL/Metal acceleration"
     homepage = "https://github.com/CyberdyneCorp/CyberMeshGenerator"
     license = "SEE-LICENSE-IN-LICENSE"  # AGPLv3 vs. relicensing is an open decision
