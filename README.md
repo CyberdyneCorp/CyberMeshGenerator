@@ -1,5 +1,6 @@
 # CyberMeshGenerator
 
+[![Version](https://img.shields.io/badge/version-0.5.0-blue)](CHANGELOG.md)
 [![C++20](https://img.shields.io/badge/C%2B%2B-20-00599C?logo=cplusplus&logoColor=white)](https://en.cppreference.com/w/cpp/20)
 [![CMake](https://img.shields.io/badge/CMake-3.25%2B-064F8C?logo=cmake&logoColor=white)](https://cmake.org/)
 [![Spec](https://img.shields.io/badge/spec-OpenSpec-3B5526)](openspec/)
@@ -201,12 +202,17 @@ A textured OBJ truss (no closed interior) meshed with `delaunay` — 8,832 verti
 ## Build
 
 ```bash
+just            # list every recipe (just --list)
+just gpu-detect # probe for CUDA / OpenCL / Metal and recommend a recipe
 just build      # configure + build (portable CPU-only)
 just test       # run the foundation test suite
 just ctest      # via CTest
+just cuda        # build the CUDA backend and run the suite on the local GPU
 just asan       # AddressSanitizer/UBSan
 just mobile     # single-precision mobile baseline
+just python-test # build the shared C ABI and run the Python binding test
 just spec       # openspec validate --all --strict
+just ci         # spec validation + warnings-as-errors build + tests (what CI runs)
 ```
 
 Or plain CMake:
